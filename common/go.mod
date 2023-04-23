@@ -1,4 +1,4 @@
-module github.com/Ignaciocl/tp1SisDis/tree/main/common
+module github.com/Ignaciocl/tp1SisDis/common
 
 go 1.20
 
