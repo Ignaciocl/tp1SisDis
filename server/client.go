@@ -84,7 +84,8 @@ func (c *Client) GetConnection() {
 		log.Fatal(err)
 		os.Exit(1)
 	}
-	listen.Accept()
+	conn, _ := listen.Accept()
+	c.conn = conn
 }
 func (c *Client) CloseConnection() {
 	c.conn.Close()

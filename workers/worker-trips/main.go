@@ -97,7 +97,7 @@ func processData(
 
 func main() {
 
-	inputQueue, _ := common.InitializeRabbitQueue[WorkerTrip, WorkerTrip]("stationWorkers", "rabbit")
+	inputQueue, _ := common.InitializeRabbitQueue[WorkerTrip, WorkerTrip]("tripWorkers", "rabbit")
 	outputQueueMontreal, _ := common.InitializeRabbitQueue[JoinerData[SendableDataMontreal], JoinerData[SendableDataMontreal]]("montrealQueue", "rabbit")
 	outputQueueStations, _ := common.InitializeRabbitQueue[JoinerData[SendableDataAvg], JoinerData[SendableDataAvg]]("stationsQueue", "rabbit")
 	outputQueueWeather, _ := common.InitializeRabbitQueue[JoinerData[SendableDataWeather], JoinerData[SendableDataWeather]]("weatherQueue", "rabbit")

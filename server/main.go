@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
 	"strings"
@@ -86,6 +87,22 @@ func PrintConfig(v *viper.Viper) {
 	)
 }
 
+type fileData struct {
+	EOF      *bool    `json:"eof"`
+	File     string   `json:"file"`
+	Stations []string `json:"stationData"`
+	Trips    []string `json:"tripsData"`
+	Weather  []string `json:"weather"`
+}
+
+type dataToSend struct {
+	File     string   `json:"file,omitempty"`
+	Stations []string `json:"stationData,omitempty"`
+	Trips    []string `json:"tripsData,omitempty"`
+	Weather  []string `json:"weather,omitempty"`
+	City     string   `json:"city,omitempty"`
+}
+
 func main() {
 	v, err := InitConfig()
 	if err != nil {
@@ -108,20 +125,36 @@ func main() {
 	}
 	client := NewClient(clientConfig)
 
-	queue, _ := common.InitializeRabbitQueue[msg, msg]("stationWorkers", "rabbit")
-
-	a := msg{
-		Intent: "sending",
-		Data:   "hello",
-	}
-	if err := queue.SendMessage(a); err != nil {
-		common.FailOnError(err, "ohhhh")
-	}
-	log.Printf(" [x] Sent %v\n", a)
+	queue, _ := common.InitializeRabbitQueue[dataToSend, dataToSend]("distributor", "rabbit")
 	client.GetConnection()
-}
+	go func() {
+		eofAmount := 0
+		city := "montreal"
+		for {
+			bodyBytes, _ := client.ReceiveData()
+			var data fileData
+			if err := json.Unmarshal(bodyBytes, &data); err != nil {
+				common.FailOnError(err, "error while receiving data")
+				continue
+			}
+			if data.EOF != nil && *data.EOF {
+				eofAmount += 1
+				if eofAmount == 3 {
+					city = "toronto"
+				} else if eofAmount == 6 {
+					city = "washington"
+				}
+				// Trigger eof globally
+				continue
+			}
+			queue.SendMessage(dataToSend{
+				File:     data.File,
+				Stations: data.Stations,
+				Trips:    data.Trips,
+				Weather:  data.Weather,
+				City:     city,
+			})
 
-type msg struct {
-	Intent string `json:"intent"`
-	Data   any    `json:"data"`
+		}
+	}()
 }
