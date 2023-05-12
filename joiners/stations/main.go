@@ -10,6 +10,7 @@ import (
 )
 
 type ReceivableDataStation struct {
+	Code string `json:"code"`
 	Name string `json:"name"`
 }
 
@@ -37,6 +38,10 @@ type stationData struct {
 	name         string
 }
 
+type weird struct {
+	m map[string]stationData
+}
+
 func (sd stationData) wasDouble() bool {
 	return sd.sadSeventeen >= 2*sd.sweetSixteen
 }
@@ -54,56 +59,111 @@ func getStationData(key string, accumulator map[string]stationData) (stationData
 	return data, err
 }
 
-func processData(data JoinerDataStation, accumulator map[string]stationData) {
+func processData(data JoinerDataStation, w *weird) {
+	accumulator := w.m
 	if station := data.DataStation; station != nil {
-		sData, _ := getStationData(station.Name, accumulator)
+		sData, _ := getStationData(station.Code, accumulator)
 		sData.name = station.Name
-		accumulator[station.Name] = sData
+		accumulator[station.Code] = sData
 	} else if trip := data.DataTrip; trip != nil {
-		station, err := getStationData(station.Name, accumulator)
+		dStation, err := getStationData(trip.Station, accumulator)
 		if err != nil {
-			// thrown because not known
+			log.Printf("missing trip info for station: %v\n", trip)
 			return
 		}
 		if trip.Year == 2016 {
-			station.sweetSixteen += 1
+			dStation.sweetSixteen += 1
 		} else if trip.Year == 2017 {
-			station.sadSeventeen += 1
+			dStation.sadSeventeen += 1
 		}
 	}
 }
 
+type checker struct {
+	data             map[string]string
+	blocker          chan struct{}
+	tripBlocker      chan struct{}
+	stationBlocker   chan struct{}
+	finishProcessing chan struct{}
+}
+
+func (c checker) IsStillUsingNecessaryDataForFile(file string, city string) bool {
+	d := <-c.blocker
+	if file == "stations" {
+		c.stationBlocker <- struct{}{}
+	}
+	if file == "trips" {
+		c.tripBlocker <- struct{}{}
+	}
+	c.blocker <- d
+	<-c.finishProcessing
+	return true
+}
+
 func main() {
 
-	inputQueue, _ := common.InitializeRabbitQueue[JoinerDataStation, JoinerDataStation]("stationWorkers", "rabbit")
+	inputQueue, _ := common.InitializeRabbitQueue[JoinerDataStation, JoinerDataStation]("stationsQueue", "rabbit")
 	aq, _ := common.InitializeRabbitQueue[AccumulatorData, AccumulatorData]("accumulator", "rabbit")
+	wfe, _ := common.CreateConsumerEOF("rabbit", "joinerStations")
+	defer inputQueue.Close()
+	defer aq.Close()
+	defer wfe.Close()
 	oniChan := make(chan os.Signal, 1)
 	// catch SIGETRM or SIGINTERRUPT
 	signal.Notify(oniChan, syscall.SIGTERM, syscall.SIGINT)
+	eofCheck := map[string]string{}
+	eofCheck["city"] = ""
+	blocker := make(chan struct{}, 1)
+	sb := make(chan struct{}, 1)
+	tb := make(chan struct{}, 1)
+	fp := make(chan struct{}, 1)
+	blocker <- struct{}{}
+	c := checker{data: eofCheck, blocker: blocker, stationBlocker: sb, tripBlocker: tb, finishProcessing: fp}
 	go func() {
-		acc := make(map[string]stationData)
+		wfe.AnswerEofOk(c)
+	}()
+	acc := map[string]stationData{}
+	w := weird{m: acc}
+	go func() {
 		for {
 			data, err := inputQueue.ReceiveMessage()
+			d := <-blocker // there is a possibility of a rc here, another lock would be fine
 			if err != nil {
 				common.FailOnError(err, "Failed while receiving message")
 				continue
 			}
-			if data.EOF && data.DataTrip != nil {
-				v := make([]string, 0, len(acc))
-				for key, value := range acc {
-					if value.wasDouble() {
-						v = append(v, key)
-					}
-				}
-				l := AccumulatorData{
-					AvgStations: v,
-					Key:         data.Key,
-				}
-				_ = aq.SendMessage(l)
-			} else {
-				processData(data, acc)
-			}
+			processData(data, &w)
+			blocker <- d
 		}
+	}()
+	go func() {
+		savedData := make(map[string]struct{}, 0)
+		for i := 0; i < 3; i += 1 {
+			<-sb
+			fp <- struct{}{}
+			<-tb
+			d := <-blocker
+			acc = w.m
+			for _, value := range acc {
+				if value.wasDouble() && value.name != "" {
+					savedData[value.name] = struct{}{}
+					log.Printf("value to check is: %v\n", value)
+				}
+			}
+			//acc = make(map[string]stationData)
+			fp <- struct{}{}
+			blocker <- d
+		}
+		v := make([]string, 0, len(savedData))
+		for key, _ := range savedData {
+			v = append(v, key)
+		}
+		l := AccumulatorData{
+			AvgStations: v,
+			Key:         "random",
+		}
+		log.Printf("data is: %+v\n", l)
+		_ = aq.SendMessage(l)
 	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")

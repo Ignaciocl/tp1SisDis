@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
+	"os"
 	"strings"
 	"time"
 
@@ -88,19 +89,44 @@ func PrintConfig(v *viper.Viper) {
 }
 
 type fileData struct {
-	EOF      *bool    `json:"eof"`
-	File     string   `json:"file"`
-	Stations []string `json:"stationData"`
-	Trips    []string `json:"tripsData"`
-	Weather  []string `json:"weather"`
+	EOF  *bool         `json:"eof"`
+	File string        `json:"file"`
+	Data []interface{} `json:"data"`
 }
 
 type dataToSend struct {
-	File     string   `json:"file,omitempty"`
-	Stations []string `json:"stationData,omitempty"`
-	Trips    []string `json:"tripsData,omitempty"`
-	Weather  []string `json:"weather,omitempty"`
-	City     string   `json:"city,omitempty"`
+	File string        `json:"file,omitempty"`
+	Data []interface{} `json:"data,omitempty"`
+	City string        `json:"city,omitempty"`
+}
+
+type EOFData struct {
+	File string `json:"file"`
+	City string `json:"city"`
+}
+
+type dataQuery struct {
+	sem  chan struct{}
+	data map[string]map[string]interface{}
+}
+
+type AccData struct {
+	QueryResult map[string]interface{} `json:"query_result"`
+}
+
+func (dq dataQuery) getQueryValue(key string) (map[string]interface{}, bool) {
+	log.Infof("starting to check query value")
+	d := <-dq.sem
+	value, ok := dq.data[key]
+	dq.sem <- d
+	log.Infof("finishing checking query value")
+	return value, ok
+}
+
+func (dq dataQuery) writeQueryValue(data map[string]interface{}) {
+	d := <-dq.sem
+	dq.data["random"] = data
+	dq.sem <- d
 }
 
 func main() {
@@ -123,38 +149,99 @@ func main() {
 		ClosingMessage: v.GetString("closingMessage"),
 		ClosingBatch:   v.GetString("closingBatch"),
 	}
+	clientConfigAcc := ClientConfig{
+		ID:             v.GetString("id"),
+		LoopLapse:      v.GetDuration("loop.lapse"),
+		LoopPeriod:     v.GetDuration("loop.period"),
+		ClosingMessage: v.GetString("closingMessage"),
+		ClosingBatch:   v.GetString("closingBatch"),
+		ServerAddress:  "3334",
+	}
 	client := NewClient(clientConfig)
+	clientAcc := NewClient(clientConfigAcc)
 
 	queue, _ := common.InitializeRabbitQueue[dataToSend, dataToSend]("distributor", "rabbit")
-	client.GetConnection()
+	eofStarter, _ := common.InitializeRabbitQueue[EOFData, EOFData]("eofStarter", "rabbit")
+	accumulatorInfo, _ := common.InitializeRabbitQueue[AccData, AccData]("accConnection", "rabbit")
+	cancelChan := make(chan os.Signal, 1)
+
+	defer queue.Close()
+	defer client.CloseConnection()
+	defer accumulatorInfo.Close()
+	defer eofStarter.Close()
+	log.Info("waiting for client")
+	sem := make(chan struct{}, 1)
+	sem <- struct{}{}
+	dq := dataQuery{
+		sem:  sem,
+		data: make(map[string]map[string]interface{}, 0),
+	}
 	go func() {
+		result, _ := accumulatorInfo.ReceiveMessage()
+		log.Infof("data received from acc is: %v", result)
+		dq.writeQueryValue(result.QueryResult)
+	}()
+	go func() {
+		log.Info("waiting for polling")
+		clientAcc.GetConnection(":3334")
+		log.Info("received connection")
+		for {
+			log.Infof("waiting for polling of client")
+			clientAcc.ReceiveData()
+			log.Infof("polling of client receive correctly")
+			if data, ok := dq.getQueryValue("random"); !ok {
+				clientAcc.AnswerClient([]byte("{}"))
+			} else {
+				p, _ := json.Marshal(data)
+				clientAcc.AnswerClient(p)
+				break
+			}
+		}
+	}()
+	go func() {
+		client.GetConnection(":9000")
 		eofAmount := 0
 		city := "montreal"
 		for {
 			bodyBytes, _ := client.ReceiveData()
 			var data fileData
+			if len(bodyBytes) < 3 {
+				continue
+			}
 			if err := json.Unmarshal(bodyBytes, &data); err != nil {
-				common.FailOnError(err, "error while receiving data")
+				common.FailOnError(err, fmt.Sprintf("error while receiving data for file: %v", string(bodyBytes)))
 				continue
 			}
 			if data.EOF != nil && *data.EOF {
+				d := EOFData{
+					File: data.File,
+					City: city,
+				}
+				eofStarter.SendMessage(d)
 				eofAmount += 1
 				if eofAmount == 3 {
 					city = "toronto"
 				} else if eofAmount == 6 {
 					city = "washington"
 				}
+				if eofAmount == 9 {
+					break
+				}
 				// Trigger eof globally
 				continue
 			}
-			queue.SendMessage(dataToSend{
-				File:     data.File,
-				Stations: data.Stations,
-				Trips:    data.Trips,
-				Weather:  data.Weather,
-				City:     city,
-			})
 
+			err := queue.SendMessage(dataToSend{
+				File: data.File,
+				Data: data.Data,
+				City: city,
+			})
+			if err != nil {
+				log.Errorf("error happened: %v", err)
+			}
 		}
+		client.CloseConnection()
+		log.Info("connection closed")
 	}()
+	<-cancelChan
 }

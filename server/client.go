@@ -1,9 +1,10 @@
 package main
 
 import (
-	"bytes"
+	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -78,27 +79,54 @@ func (c *Client) OpenConnection() error {
 	return nil
 }
 
-func (c *Client) GetConnection() {
-	listen, err := net.Listen("tcp", ":9000")
+func (c *Client) GetConnection(address string) {
+	listen, err := net.Listen("tcp", address)
 	if err != nil {
 		log.Fatal(err)
 		os.Exit(1)
 	}
 	conn, _ := listen.Accept()
+	log.Println("connected")
 	c.conn = conn
 }
 func (c *Client) CloseConnection() {
 	c.conn.Close()
 }
 
-func (c *Client) SendData(bytes []byte, lastBatch bool) error {
-	closingMessage := c.config.ClosingMessage
-	if lastBatch {
-		closingMessage = c.config.ClosingBatch
-	}
-	bytesToSend := append(bytes, closingMessage...)
+func (c *Client) SendData(bytes []byte) error {
+	conn, _ := net.Dial("udp", "manager:10001")
+	size := len(bytes)
+	bytesAmount := []byte(fmt.Sprintf("%04d", size))
+	bytesToSend := append(bytesAmount, bytes...)
 	eightKB := 8 * 1024
-	size := len(bytesToSend)
+	size = len(bytesToSend)
+	for i := 0; i <= len(bytesToSend); i += eightKB {
+		var sending []byte
+		if size < i+eightKB {
+			sending = bytesToSend[i:size]
+		} else {
+			sending = bytesToSend[i : i+eightKB]
+		}
+		amountSent, err := conn.Write(sending)
+		if err != nil {
+			log.Errorf("weird error happened, stopping but something should be checked: %v", err)
+			return err
+		}
+		if dif := len(sending) - amountSent; dif > 0 { // Avoiding short write
+			i -= dif
+		}
+	}
+	conn.Close()
+	return nil
+}
+
+func (c *Client) AnswerClient(bytes []byte) error {
+	size := len(bytes)
+	bytesAmount := []byte(fmt.Sprintf("%05d", size))
+	bytesToSend := append(bytesAmount, bytes...)
+	eightKB := 8 * 1024
+	size = len(bytesToSend)
+	log.Infof("client send a message with %v", string(bytesToSend))
 	for i := 0; i <= len(bytesToSend); i += eightKB {
 		var sending []byte
 		if size < i+eightKB {
@@ -108,32 +136,64 @@ func (c *Client) SendData(bytes []byte, lastBatch bool) error {
 		}
 		amountSent, err := c.conn.Write(sending)
 		if err != nil {
-			log.Errorf("weird error happened, stopping but something should be checked: %v", err)
+			log.Printf("weird error happened, stopping but something should be checked: %v", err)
 			return err
 		}
 		if dif := len(sending) - amountSent; dif > 0 { // Avoiding short write
 			i -= dif
 		}
 	}
+	log.Infof("client was answered with %v", string(bytesToSend))
 	return nil
 }
 
 func (c *Client) ReceiveData() ([]byte, error) {
-	eightKB := 8 * 1024
-	received := make([]byte, eightKB)
-	checkedValue := []byte(c.config.ClosingMessage)
+	const sizeToRead = 5
+	bytesToRead := make([]byte, sizeToRead)
 	total := make([]byte, 0)
+	if i, err := c.conn.Read(bytesToRead); i < sizeToRead {
+		bytesToRead = bytesToRead[0:i]
+		if err != nil {
+			log.Infof("error while reading is %v", err)
+		}
+		log.Infof("bytes read: %s", string(bytesToRead))
+		j := i
+		remaining := sizeToRead
+		for {
+			r := remaining - j
+			remaining -= j
+			innerBytes := make([]byte, r)
+			j, err := c.conn.Read(innerBytes)
+			if err != nil {
+				//log.Infof("error while reading inner %v", err)
+			}
+			innerBytes = innerBytes[0:j]
+			bytesToRead = append(bytesToRead, innerBytes...)
+			if j == remaining {
+				break
+			}
+		}
+	}
+	n, err := strconv.Atoi(string(bytesToRead))
+	if err != nil {
+		log.Infof("error is %v while converting %s", err, string(bytesToRead))
+	}
+	realN := n
+	received := make([]byte, n)
 	for {
 		if i, err := c.conn.Read(received); err != nil {
 			log.Errorf("error while receiving message, ending receiver: %v", err)
 			return nil, err
 		} else {
 			total = append(total, received[0:i]...)
-		}
-		if bytes.HasSuffix(total, checkedValue) {
-			break
+			if i < n {
+				n = n - i
+				received = make([]byte, n)
+			} else {
+				break
+			}
 		}
 	}
-	finalData := total[0 : len(total)-len(c.config.ClosingMessage)]
+	finalData := total[0:realN]
 	return finalData, nil
 }
