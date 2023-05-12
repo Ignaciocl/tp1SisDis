@@ -63,9 +63,7 @@ if __name__ == "__main__":
             bytesToRead = b''
             while len(bytesToRead) < 5:
                 bytesToRead += s.recv(5 - len(bytesToRead))
-            print(f"first values {bytesToRead}")
             nextTime = s.recv(int(bytesToRead))
-            print(f"next values {nextTime}")
             if len(nextTime) > 5:
                 res = json.loads(nextTime)
                 break
