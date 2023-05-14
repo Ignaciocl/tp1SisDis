@@ -1,8 +1,9 @@
 package main
 
 import (
+	"fmt"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
-	"log"
+	log "github.com/sirupsen/logrus"
 	"os"
 	"os/signal"
 	"syscall"
@@ -112,15 +113,15 @@ func main() {
 				continue
 			}
 			if data.EOF {
-
-				iqEOF.AnswerEofOk(data.IdempotencyKey, nil)
+				log.Infof("eof received to be triggered: %v", data)
+				iqEOF.AnswerEofOk(fmt.Sprintf("%s-%s", data.IdempotencyKey, id), nil)
 				continue
 			}
 			processData(data, outputQueueMontreal, outputQueueStations)
 		}
 	}()
 
-	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
+	log.Info(" [*] Waiting for messages. To exit press CTRL+C")
 	<-oniChan
-	log.Printf("Closing for sigterm received")
+	log.Print("Closing for sigterm received")
 }

@@ -2,7 +2,7 @@ package main
 
 import (
 	common "github.com/Ignaciocl/tp1SisdisCommons"
-	"log"
+	log "github.com/sirupsen/logrus"
 	"os"
 	"os/signal"
 	"syscall"
@@ -109,6 +109,7 @@ func main() {
 		for {
 			data, err := inputQueue.ReceiveMessage()
 			if data.EOF {
+				log.Infof("data received is: %v", data)
 				sfe.AnswerEofOk(data.IdempotencyKey, actionable{
 					c:  st,
 					nc: tt,

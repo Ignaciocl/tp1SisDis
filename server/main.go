@@ -213,7 +213,7 @@ func main() {
 					IdempotencyKey: fmt.Sprintf("%s-%s", city, data.File),
 				})
 				eofStarter.Publish("distributorEOF", d, "")
-				client.AnswerClient([]byte("{\"finish\": true}"))
+				//client.AnswerClient([]byte("{\"finish\": true}"))
 				eofAmount += 1
 				if eofAmount == 3 {
 					city = "toronto"
@@ -235,7 +235,7 @@ func main() {
 			if err != nil {
 				log.Errorf("error happened: %v", err)
 			}
-			client.AnswerClient([]byte("{\"continue\": true}"))
+			//client.AnswerClient([]byte("{\"continue\": true}"))
 		}
 		client.CloseConnection()
 		log.Info("connection closed")

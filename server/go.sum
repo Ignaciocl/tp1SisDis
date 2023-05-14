@@ -106,6 +106,10 @@ github.com/Ignaciocl/tp1SisdisCommons v0.3.12 h1:s20Kes2nsGSDYvC0NygnAoWLB2xgRyQ
 github.com/Ignaciocl/tp1SisdisCommons v0.3.12/go.mod h1:xt+rPp8Xzf2DxXfMA4n8IUf28ACj8ceSdXheBtQTMyA=
 github.com/Ignaciocl/tp1SisdisCommons v0.3.13 h1:p+SpKBEcnonQq+tueAkjsMo4wjX/BCe2Hn9XBa8MhRY=
 github.com/Ignaciocl/tp1SisdisCommons v0.3.13/go.mod h1:xt+rPp8Xzf2DxXfMA4n8IUf28ACj8ceSdXheBtQTMyA=
+github.com/Ignaciocl/tp1SisdisCommons v0.3.14 h1:8rKokP2d6CSWRj4rFMtmWFE72KXl79GDcWgVMLzDtZw=
+github.com/Ignaciocl/tp1SisdisCommons v0.3.14/go.mod h1:CXI2LfiMoCFYA8LgpX2rWEJx+7xY9bWyH2cXVLONplE=
+github.com/Ignaciocl/tp1SisdisCommons v0.3.16 h1:MMqBhubJPuUsy0CZjt3s4z/l8PCymvO/T8cyblo4Q9U=
+github.com/Ignaciocl/tp1SisdisCommons v0.3.16/go.mod h1:CXI2LfiMoCFYA8LgpX2rWEJx+7xY9bWyH2cXVLONplE=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
 github.com/chzyer/logex v1.1.10/go.mod h1:+Ywpsq7O8HXn0nuIou7OrIPyXbp3wmkHB+jjWRnGsAI=
 github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e/go.mod h1:nSuG5e5PlCu98SY8svDHJxuZscDgtXS6KTTbou5AhLI=
@@ -382,6 +386,8 @@ golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8/go.mod h1:oPkhp1MJrh7nUepCBc
 golang.org/x/sys v0.0.0-20220908164124-27713097b956/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.3.0 h1:w8ZOecv6NaNa/zC8944JTU3vz4u6Lagfk4RPQxv92NQ=
 golang.org/x/sys v0.3.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+golang.org/x/sys v0.8.0 h1:EBmGv8NaZBZTWvrbjNoL6HVt+IVy3QDQpJs7VRIw3tU=
+golang.org/x/sys v0.8.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1/go.mod h1:bj7SfCRtBDWHUb9snDiAeCFNEtKQo2Wmx5Cou7ajbmo=
 golang.org/x/text v0.0.0-20170915032832-14c0d48ead0c/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=
 golang.org/x/text v0.3.0/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=

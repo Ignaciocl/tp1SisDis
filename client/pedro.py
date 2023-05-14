@@ -2,7 +2,7 @@ import json
 import socket
 import time
 
-LINES_TO_SEND = 15  # It must have less than 8192 chars
+LINES_TO_SEND = 50
 
 
 def formatSendMessage(data):
@@ -38,13 +38,13 @@ def sendCSVFile(nameFile, client):
             d = bytes(strToSend, 'utf-8')
             client.send(d)
             sent.append(strToSend)
-            receiveData(client)
+            # receiveData(client)
         data["data"], data["eof"] = [], True
         strToSend = formatSendMessage(data)
         client.send(bytes(strToSend, 'utf-8'))
         sent.append(strToSend)
-        resServer = receiveData(client)
-        print(json.loads(resServer))
+        # resServer = receiveData(client)
+        # print(json.loads(resServer))
 
 
 def receiveData(sock):
@@ -71,6 +71,7 @@ if __name__ == "__main__":
             s.send(bytes(dataSending, 'utf-8'))
             nextTime = receiveData(s)
             if len(nextTime) > 5:
+                print(str(nextTime, 'utf-8'))
                 res = json.loads(nextTime)
                 break
             print("polling failed, waiting a little bit")
