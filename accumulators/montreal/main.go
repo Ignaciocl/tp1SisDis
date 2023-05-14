@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
 	"log"
 	"os"
@@ -26,12 +25,13 @@ func (d *dStation) didItWentMoreThan(distanceAvg float64) bool {
 type AccumulatorData struct {
 	EndingStation string  `json:"ending_station"`
 	Distance      float64 `json:"distance"`
-	EOF           bool    `json:"eof"`
+	common.EofData
 }
 
 type Accumulator struct {
 	Key      string   `json:"key"`
 	Stations []string `json:"stations"`
+	common.EofData
 }
 
 func processData(data AccumulatorData, m map[string]dStation) {
@@ -46,80 +46,57 @@ func processData(data AccumulatorData, m map[string]dStation) {
 	m[data.EndingStation] = station
 }
 
-type checker struct {
-	blocker     chan struct{}
-	eofReceived chan struct{}
+type actionable struct {
+	nc   chan common.EofData
+	data common.EofData
 }
 
-func (c checker) IsStillUsingNecessaryDataForFile(file string, city string) bool {
-	d := <-c.blocker
-	c.eofReceived <- d
-	log.Printf("eof is received")
-	c.blocker <- d
-	return true
+func (a actionable) DoActionIfEOF() {
+	a.nc <- a.data // continue the loop
 }
 
 func main() {
-	inputQueue, _ := common.InitializeRabbitQueue[AccumulatorData, AccumulatorData]("preAccumulatorMontreal", "rabbit")
-	outputQueue, _ := common.InitializeRabbitQueue[Accumulator, Accumulator]("accumulator", "rabbit")
-	wfe, _ := common.CreateConsumerEOF("rabbit", "accumulatorMontreal")
+	inputQueue, _ := common.InitializeRabbitQueue[AccumulatorData, AccumulatorData]("preAccumulatorMontreal", "rabbit", "", 0)
+	outputQueue, _ := common.InitializeRabbitQueue[Accumulator, Accumulator]("accumulator", "rabbit", "", 0)
+	me, _ := common.CreateConsumerEOF(nil, "preAccumulatorMontrealEOF", inputQueue, 1)
+	defer me.Close()
 	defer inputQueue.Close()
 	defer outputQueue.Close()
-	defer wfe.Close()
 	oniChan := make(chan os.Signal, 1)
+	eof := make(chan common.EofData, 1)
 	// catch SIGETRM or SIGINTERRUPT
 	signal.Notify(oniChan, syscall.SIGTERM, syscall.SIGINT)
-	blocker := make(chan struct{}, 1)
-	eofReceived := make(chan struct{}, 1)
-	blocker <- struct{}{}
-	c := checker{eofReceived: eofReceived, blocker: blocker}
-	finished := false
-	go func() {
-		wfe.AnswerEofOk(c)
-	}()
 	acc := make(map[string]dStation)
 	go func() {
 		for {
 			data, err := inputQueue.ReceiveMessage()
-			d := <-blocker
+			if data.EOF {
+
+				me.AnswerEofOk(data.IdempotencyKey, actionable{
+					nc:   eof,
+					data: data.EofData,
+				})
+				continue
+			}
+
 			if err != nil {
 				common.FailOnError(err, "Failed while receiving message")
 				continue
 			}
-			p, _ := json.Marshal(data)
-			log.Printf("DATA IN MONTREAL 2 RECEIVED IS: %s, passed: %v\n", string(p), finished)
 			processData(data, acc)
-			blocker <- d
 		}
 	}()
 	go func() {
-		r := 0
-		for {
-			<-eofReceived
-			r += 1
-			if r > 1 {
-				break
-			}
-		}
-		r = 0
-		for {
-			d := <-blocker
-			if inputQueue.IsEmpty() {
-				break
-			}
-			blocker <- d
-		}
+		d := <-eof
+		d.IdempotencyKey = "random"
 		v := make([]string, 0, len(acc))
 		for key, value := range acc {
-			if value.didItWentMoreThan(5) {
+			if value.didItWentMoreThan(6) {
 				v = append(v, key)
 			}
 		}
-		log.Printf("stations to check are %v and passed: %v\n", acc, v)
 		_ = outputQueue.SendMessage(Accumulator{Stations: v, Key: "random"}) // do graceful shutdown
-		finished = true
-		blocker <- struct{}{}
-		return
+		_ = outputQueue.SendMessage(Accumulator{EofData: d})
 	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")

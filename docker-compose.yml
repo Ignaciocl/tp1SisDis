@@ -1,143 +1,256 @@
-services:
-  server:
-    container_name: server
-    build:
-      context: ./server/
-    depends_on:
-      rabbit:
-        condition: service_healthy
-    ports:
-      - '3034:9000'
-      - '3334:3334'
-    volumes:
-      - './server/main.go/:/app/main.go'
-      - './server/client.go/:/app/client.go'
-    networks:
-      - bikers
-
-  rabbit:
-    image: rabbitmq:management
-    container_name: rabbitContainer
-    ports:
-      - '5672:5672'
-      - '15672:15672'
-    networks:
-      - bikers
-    healthcheck:
-      test: rabbitmq-diagnostics check_port_connectivity
-      interval: 30s
-      timeout: 30s
-      retries: 10
-  worker-station:
-    depends_on:
-      rabbit:
-        condition: service_healthy
-    build:
-      context: ./workers/worker-stations
-    volumes:
-      - './workers/worker-stations/main.go/:/app/main.go'
-      - './workers/worker-stations/Queue.go/:/app/Queue.go'
-    networks:
-      - bikers
-  worker-trip:
-    depends_on:
-      rabbit:
-        condition: service_healthy
-    build:
-      context: ./workers/worker-trips
-    volumes:
-      - './workers/worker-trips/main.go/:/app/main.go'
-    networks:
-      - bikers
-  worker-weather:
-    depends_on:
-      rabbit:
-        condition: service_healthy
-    build:
-      context: ./workers/worker-weather
-    volumes:
-      - './workers/worker-weather/main.go/:/app/main.go'
-    networks:
-      - bikers
-  joiner-weather:
-    depends_on:
-      rabbit:
-        condition: service_healthy
-    container_name: joinerWeather
-    build:
-      context: ./joiners/weather
-    volumes:
-      - './joiners/weather/main.go/:/app/main.go'
-    networks:
-      - bikers
-  joiner-stations:
-    depends_on:
-      rabbit:
-        condition: service_healthy
-    container_name: joinerStation
-    build:
-      context: ./joiners/stations
-    volumes:
-      - './joiners/stations/main.go/:/app/main.go'
-      - './joiners/stations/Queue.go/:/app/Queue.go'
-    networks:
-      - bikers
-  joiner-montreal:
-    depends_on:
-      rabbit:
-        condition: service_healthy
-    container_name: joinerMontreal
-    build:
-      context: ./joiners/montreal
-    volumes:
-      - './joiners/montreal/main.go/:/app/main.go'
-    networks:
-      - bikers
-  distributor:
-    depends_on:
-      rabbit:
-        condition: service_healthy
-    build:
-      context: ./distributor
-    volumes:
-      - './distributor/main.go/:/app/main.go'
-      - './distributor/Queue.go/:/app/Queue.go'
-    networks:
-      - bikers
-  accumulator-montreal:
-    depends_on:
-      rabbit:
-        condition: service_healthy
-    container_name: accumulatorMontreal
-    build:
-      context: ./accumulators/montreal
-    volumes:
-      - './accumulators/montreal/main.go/:/app/main.go'
-    networks:
-      - bikers
-  accumulator-main:
-    depends_on:
-      rabbit:
-        condition: service_healthy
-    container_name: accumulatorMain
-    build:
-      context: ./accumulators/mainAccumulator
-    volumes:
-      - './accumulators/mainAccumulator/main.go/:/app/main.go'
-    networks:
-      - bikers
-  manager:
-    depends_on:
-      rabbit:
-        condition: service_healthy
-    container_name: manager
-    build:
-      context: ./manager
-    volumes:
-      - './manager/main.go/:/app/main.go'
-    networks:
-      - bikers
-
 networks:
   bikers:
     name: we are bikers
+services:
+  accumulator-main:
+    build:
+      context: ./accumulators/mainAccumulator
+    container_name: accumulatorMain
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    networks:
+    - bikers
+    volumes:
+    - ./accumulators/mainAccumulator/main.go/:/app/main.go
+  accumulator-montreal:
+    build:
+      context: ./accumulators/montreal
+    container_name: accumulatorMontreal
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    networks:
+    - bikers
+    volumes:
+    - ./accumulators/montreal/main.go/:/app/main.go
+  distributor1:
+    build:
+      context: ./distributor
+    container_name: distributor1
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+    - id=1
+    image: client:latest
+    networks:
+    - bikers
+    volumes:
+    - ./distributor/main.go/:/app/main.go
+  distributor2:
+    build:
+      context: ./distributor
+    container_name: distributor2
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+    - id=2
+    image: client:latest
+    networks:
+    - bikers
+    volumes:
+    - ./distributor/main.go/:/app/main.go
+  distributor3:
+    build:
+      context: ./distributor
+    container_name: distributor3
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+    - id=3
+    image: client:latest
+    networks:
+    - bikers
+    volumes:
+    - ./distributor/main.go/:/app/main.go
+  joiner-montreal:
+    build:
+      context: ./joiners/montreal
+    container_name: joinerMontreal
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    networks:
+    - bikers
+    volumes:
+    - ./joiners/montreal/main.go/:/app/main.go
+  joiner-stations:
+    build:
+      context: ./joiners/stations
+    container_name: joinerStation
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    networks:
+    - bikers
+    volumes:
+    - ./joiners/stations/main.go/:/app/main.go
+    - ./joiners/stations/Queue.go/:/app/Queue.go
+  joiner-weather:
+    build:
+      context: ./joiners/weather
+    container_name: joinerWeather
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    networks:
+    - bikers
+    volumes:
+    - ./joiners/weather/main.go/:/app/main.go
+  rabbit:
+    container_name: rabbitContainer
+    healthcheck:
+      interval: 30s
+      retries: 10
+      test: rabbitmq-diagnostics check_port_connectivity
+      timeout: 30s
+    image: rabbitmq:management
+    networks:
+    - bikers
+    ports:
+    - 5672:5672
+    - 15672:15672
+  server:
+    build:
+      context: ./server/
+    container_name: server
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    networks:
+    - bikers
+    ports:
+    - 3034:9000
+    - 3334:3334
+    volumes:
+    - ./server/main.go/:/app/main.go
+    - ./server/client.go/:/app/client.go
+  worker-station1:
+    build:
+      context: ./workers/worker-stations
+    container_name: worker-station1
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+    - id=1
+    image: client:latest
+    networks:
+    - bikers
+    volumes:
+    - ./workers/worker-stations/main.go/:/app/main.go
+  worker-station2:
+    build:
+      context: ./workers/worker-stations
+    container_name: worker-station2
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+    - id=2
+    image: client:latest
+    networks:
+    - bikers
+    volumes:
+    - ./workers/worker-stations/main.go/:/app/main.go
+  worker-station3:
+    build:
+      context: ./workers/worker-stations
+    container_name: worker-station3
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+    - id=3
+    image: client:latest
+    networks:
+    - bikers
+    volumes:
+    - ./workers/worker-stations/main.go/:/app/main.go
+  worker-trip1:
+    build:
+      context: ./workers/worker-trips
+    container_name: worker-trip1
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+    - id=1
+    image: client:latest
+    networks:
+    - bikers
+    volumes:
+    - ./workers/worker-trips/main.go/:/app/main.go
+  worker-trip2:
+    build:
+      context: ./workers/worker-trips
+    container_name: worker-trip2
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+    - id=2
+    image: client:latest
+    networks:
+    - bikers
+    volumes:
+    - ./workers/worker-trips/main.go/:/app/main.go
+  worker-trip3:
+    build:
+      context: ./workers/worker-trips
+    container_name: worker-trip3
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+    - id=3
+    image: client:latest
+    networks:
+    - bikers
+    volumes:
+    - ./workers/worker-trips/main.go/:/app/main.go
+  worker-weather1:
+    build:
+      context: ./workers/worker-weather
+    container_name: worker-weather1
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+    - id=1
+    image: client:latest
+    networks:
+    - bikers
+    volumes:
+    - ./workers/worker-weather/main.go/:/app/main.go
+  worker-weather2:
+    build:
+      context: ./workers/worker-weather
+    container_name: worker-weather2
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+    - id=2
+    image: client:latest
+    networks:
+    - bikers
+    volumes:
+    - ./workers/worker-weather/main.go/:/app/main.go
+  worker-weather3:
+    build:
+      context: ./workers/worker-weather
+    container_name: worker-weather3
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+    - id=3
+    image: client:latest
+    networks:
+    - bikers
+    volumes:
+    - ./workers/worker-weather/main.go/:/app/main.go

@@ -25,7 +25,7 @@ type WorkerTrip struct {
 	City string `json:"city"`
 	Data Trip   `json:"data,omitempty"`
 	Key  string `json:"key"`
-	EOF  bool   `json:"EOF"`
+	common.EofData
 }
 
 type SendableDataMontreal struct {
@@ -40,7 +40,7 @@ type SendableDataAvg struct {
 
 type SendableDataWeather struct {
 	Duration int32  `json:"duration"`
-	Date     string `json:"day"`
+	Date     string `json:"date"`
 }
 
 type JoinerData[T any] struct {
@@ -128,40 +128,33 @@ func processData(
 
 func main() {
 
-	inputQueue, _ := common.InitializeRabbitQueue[WorkerTrip, WorkerTrip]("tripWorkers", "rabbit")
-	outputQueueMontreal, _ := common.InitializeRabbitQueue[JoinerData[SendableDataMontreal], JoinerData[SendableDataMontreal]]("montrealQueue", "rabbit")
-	outputQueueStations, _ := common.InitializeRabbitQueue[JoinerData[SendableDataAvg], JoinerData[SendableDataAvg]]("stationsQueue", "rabbit")
-	outputQueueWeather, _ := common.InitializeRabbitQueue[JoinerData[SendableDataWeather], JoinerData[SendableDataWeather]]("weatherQueueTrip", "rabbit")
-	wfe, _ := common.CreateConsumerEOF("rabbit", "workerTrips")
+	id := os.Getenv("id")
+	inputQueue, _ := common.InitializeRabbitQueue[WorkerTrip, WorkerTrip]("tripWorkers", "rabbit", id, 0)
+	outputQueueMontreal, _ := common.InitializeRabbitQueue[JoinerData[SendableDataMontreal], JoinerData[SendableDataMontreal]]("montrealQueueTrip", "rabbit", "", 0)
+	outputQueueStations, _ := common.InitializeRabbitQueue[JoinerData[SendableDataAvg], JoinerData[SendableDataAvg]]("stationsQueueTrip", "rabbit", "", 0)
+	outputQueueWeather, _ := common.InitializeRabbitQueue[JoinerData[SendableDataWeather], JoinerData[SendableDataWeather]]("weatherQueueTrip", "rabbit", "", 0)
+	v := make([]string, 3)
+	v = append(v, "montrealQueueTripEOF", "stationsQueueTripEOF", "weatherQueueTripEOF")
+	iqEOF, _ := common.CreateConsumerEOF(v, "tripWorkersEOF", inputQueue, 3)
+	defer iqEOF.Close()
 	defer inputQueue.Close()
 	defer outputQueueMontreal.Close()
 	defer outputQueueStations.Close()
 	defer outputQueueWeather.Close()
-	defer wfe.Close()
-
-	eofCheck := map[string]string{}
-	eofCheck["city"] = ""
-	blocker := make(chan struct{}, 1)
-	blocker <- struct{}{}
-	c := checker{data: eofCheck, blocker: blocker, filesUsed: 0, q: inputQueue}
-	go func() {
-		wfe.AnswerEofOk(c)
-	}()
 
 	cancelChan := make(chan os.Signal, 1)
 	// catch SIGETRM or SIGINTERRUPT
 	signal.Notify(cancelChan, syscall.SIGTERM, syscall.SIGINT)
 	go func() {
-		pCity := MontrealStation
 		for {
 			data, err := inputQueue.ReceiveMessage()
 			if err != nil {
 				common.FailOnError(err, "Failed while receiving message")
 				continue
 			}
-			if data.City != pCity || pCity == "washington" {
-				pCity = data.City
-				blocker <- struct{}{}
+			if data.EOF {
+				iqEOF.AnswerEofOk(data.IdempotencyKey, nil)
+				continue
 			}
 			processData(data, outputQueueMontreal, outputQueueStations, outputQueueWeather)
 		}

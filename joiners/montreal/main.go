@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
 	lasPistasDeBlue "github.com/umahmood/haversine"
 	"log"
@@ -32,7 +31,7 @@ type JoinerDataStation struct {
 	DataTrip    *SendableDataTrip    `json:"tripData,omitempty"`
 	Name        string               `json:"name,omitempty"`
 	Key         string               `json:"key,omitempty"`
-	EOF         bool                 `json:"EOF,omitempty"`
+	common.EofData
 }
 
 type sData struct {
@@ -78,16 +77,9 @@ type AccumulatorData struct {
 
 func processData(station JoinerDataStation, accumulator map[string]sData, aq common.Queue[AccumulatorData, AccumulatorData]) {
 	if s := station.DataStation; s != nil {
-		log.Printf("station received in montreal is: %v", s)
 		accumulator[station.DataStation.Code] = sData{Long: station.DataStation.Longitude, Lat: station.DataStation.Latitude, Name: station.DataStation.Name}
 	} else if trip := station.DataTrip; trip != nil {
-		log.Printf("trip received in montreal is: %v", trip)
-		if !StationEof {
-			TRIPS = append(TRIPS, *trip)
-			return
-		}
 		SendInfo(accumulator, *trip, aq)
-
 	}
 }
 
@@ -111,64 +103,69 @@ func SendInfo(accumulator map[string]sData, trip SendableDataTrip, aq common.Que
 	return false
 }
 
-type checker struct {
-	data    map[string]string
-	blocker chan struct{}
-	station chan struct{}
+type actionable struct {
+	c  chan struct{}
+	nc chan struct{}
 }
 
-func (c checker) IsStillUsingNecessaryDataForFile(file string, city string) bool {
-	d := <-c.blocker
-	if file == "stations" {
-		StationEof = true
-		c.station <- struct{}{}
-	}
-	c.blocker <- d
-	return true
+func (a actionable) DoActionIfEOF() {
+	a.nc <- <-a.c // continue the loop
 }
 
 func main() {
-	inputQueue, _ := common.InitializeRabbitQueue[JoinerDataStation, JoinerDataStation]("montrealQueue", "rabbit")
-	aq, _ := common.InitializeRabbitQueue[AccumulatorData, AccumulatorData]("preAccumulatorMontreal", "rabbit")
-	wfe, _ := common.CreateConsumerEOF("rabbit", "joinerMontreal")
+	inputQueue, _ := common.InitializeRabbitQueue[JoinerDataStation, JoinerDataStation]("montrealQueue", "rabbit", "", 0)
+	inputQueueTrip, _ := common.InitializeRabbitQueue[JoinerDataStation, JoinerDataStation]("montrealQueueTrip", "rabbit", "", 0)
+	aq, _ := common.InitializeRabbitQueue[AccumulatorData, AccumulatorData]("preAccumulatorMontreal", "rabbit", "", 0)
+	sfe, _ := common.CreateConsumerEOF(nil, "montrealQueueEOF", inputQueue, 3)
+	tfe, _ := common.CreateConsumerEOF([]string{"preAccumulatorMontrealEOF"}, "montrealQueueTripEOF", inputQueueTrip, 3)
 	defer inputQueue.Close()
 	defer aq.Close()
-	defer wfe.Close()
+	defer inputQueueTrip.Close()
 	oniChan := make(chan os.Signal, 1)
+	tt := make(chan struct{}, 1)
+	st := make(chan struct{}, 1)
+	st <- struct{}{}
 	// catch SIGETRM or SIGINTERRUPT
 	signal.Notify(oniChan, syscall.SIGTERM, syscall.SIGINT)
-	eofCheck := map[string]string{}
-	eofCheck["city"] = ""
-	blocker := make(chan struct{}, 1)
-	stationFinished := make(chan struct{}, 1)
-	blocker <- struct{}{}
-	c := checker{data: eofCheck, blocker: blocker, station: stationFinished}
-	go func() {
-		wfe.AnswerEofOk(c)
-	}()
 	acc := make(map[string]sData)
 	go func() {
 		for {
 			data, err := inputQueue.ReceiveMessage()
+			if data.EOF {
+				sfe.AnswerEofOk(data.IdempotencyKey, actionable{
+					c:  st,
+					nc: tt,
+				})
+				continue
+			}
+			d := <-st
 			if err != nil {
 				common.FailOnError(err, "Failed while receiving message")
 				continue
 			}
-			d := <-blocker
 			processData(data, acc, aq)
-			p, _ := json.Marshal(data)
-			log.Printf("DATA IN MONTREAL RECEIVED IS: %s\n", string(p))
-			blocker <- d
+			st <- d
 		}
 	}()
 	go func() {
-		<-stationFinished
-		d := <-blocker
-		for _, t := range TRIPS {
-			SendInfo(acc, t, aq)
+		for {
+			data, err := inputQueueTrip.ReceiveMessage()
+			if data.EOF {
+
+				tfe.AnswerEofOk(data.IdempotencyKey, actionable{
+					c:  tt,
+					nc: st,
+				})
+				continue
+			}
+			d := <-tt
+			if err != nil {
+				common.FailOnError(err, "Failed while receiving message")
+				continue
+			}
+			processData(data, acc, aq)
+			tt <- d
 		}
-		log.Printf("montreal info trips is: %v\n", TRIPS)
-		blocker <- d
 	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")

@@ -13,6 +13,7 @@ type Accumulator struct {
 	AvgStations []string `json:"avg_stations,omitempty"`
 	Duration    *float64 `json:"duration"`
 	Key         string   `json:"key"`
+	common.EofData
 }
 
 type QueryResponse struct {
@@ -26,13 +27,13 @@ func processData(data Accumulator, acc map[string]QueryResponse) {
 		d := getQueryResponse(data.Key, acc)
 		d.Montreal = data.Stations
 		acc["random"] = d
-	} else if data.AvgStations != nil { // Add here the logic of inter values (not for all cities but for specifics), could be done after connecting everything
+	} else if data.AvgStations != nil {
 		d := getQueryResponse(data.Key, acc)
 		d.Avg = data.AvgStations
 		acc["random"] = d
 	} else if data.Duration != nil {
 		d := getQueryResponse(data.Key, acc)
-		d.Avg = data.AvgStations
+		d.AvgMore30 = data.Duration
 		acc["random"] = d
 	}
 }
@@ -45,34 +46,25 @@ func getQueryResponse(key string, acc map[string]QueryResponse) QueryResponse {
 	return d
 }
 
-type checker struct {
-	blocker     chan struct{}
-	eofReceived chan struct{}
-}
-
 type QueryResult struct {
 	Data QueryResponse `json:"query_result"`
 }
 
-func (c checker) IsStillUsingNecessaryDataForFile(file string, city string) bool {
-	d := <-c.blocker
-	log.Printf("EOF received for file %s and city %s\n", file, city)
-	c.eofReceived <- d
-	c.blocker <- d
-	return true
+type actionable struct {
+	nc chan struct{}
+}
+
+func (a actionable) DoActionIfEOF() {
+	a.nc <- struct{}{} // continue the loop
 }
 
 func main() {
-	inputQueue, _ := common.InitializeRabbitQueue[Accumulator, Accumulator]("accumulator", "rabbit")
-	wfe, _ := common.CreateConsumerEOF("rabbit", "accumulatorEOF")
-	accumulatorInfo, _ := common.InitializeRabbitQueue[QueryResult, QueryResult]("accConnection", "rabbit")
-	blocker := make(chan struct{}, 1)
-	eofReceived := make(chan struct{}, 1)
-	blocker <- struct{}{}
-	c := checker{blocker: blocker, eofReceived: eofReceived}
-	go func() {
-		wfe.AnswerEofOk(c)
-	}()
+	inputQueue, _ := common.InitializeRabbitQueue[Accumulator, Accumulator]("accumulator", "rabbit", "", 0)
+	me, _ := common.CreateConsumerEOF(nil, "accumulatorEOF", inputQueue, 3)
+	accumulatorInfo, _ := common.InitializeRabbitQueue[QueryResult, QueryResult]("accConnection", "rabbit", "", 0)
+	defer accumulatorInfo.Close()
+	defer inputQueue.Close()
+	ns := make(chan struct{}, 1)
 	oniChan := make(chan os.Signal, 1)
 	// catch SIGETRM or SIGINTERRUPT
 	signal.Notify(oniChan, syscall.SIGTERM, syscall.SIGINT)
@@ -80,36 +72,23 @@ func main() {
 	go func() {
 		for {
 			data, err := inputQueue.ReceiveMessage()
-			d := <-blocker
-			log.Printf("data is: %v\n", data)
+			if data.EOF {
+
+				me.AnswerEofOk(data.IdempotencyKey, actionable{nc: ns})
+				continue
+			}
 			if err != nil {
 				common.FailOnError(err, "Failed while receiving message")
 				continue
 			}
 			processData(data, acc)
-			blocker <- d
 		}
 	}()
 	go func() {
-		r := 0
-		for {
-			<-eofReceived
-			r += 1
-			if r > 8 {
-				break
-			}
-		}
-		for {
-			d := <-blocker
-			if inputQueue.IsEmpty() {
-				break
-			}
-			blocker <- d
-		}
+		<-ns
 		qr := QueryResult{Data: acc["random"]}
-		log.Printf("ALL EOF RECEIVEDL %v\n", qr)
+
 		accumulatorInfo.SendMessage(qr)
-		r = 0
 	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")

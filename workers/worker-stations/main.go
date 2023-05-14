@@ -20,7 +20,7 @@ type WorkerStation struct {
 	City string  `json:"city"`
 	Data Station `json:"data,omitempty"`
 	Key  string  `json:"key"`
-	EOF  bool    `json:"EOF"`
+	common.EofData
 }
 
 type SendableDataStation struct {
@@ -58,7 +58,6 @@ func processData(station WorkerStation, qm, qs common.Queue[JoinerDataStation, J
 		}
 	}
 	if station.Data.Year == 2016 || station.Data.Year == 2017 {
-		log.Printf("station to send is: %v\n", station)
 		err := qs.SendMessage(js)
 		if err != nil {
 			common.FailOnError(err, "Couldn't send message to joiner stations, failing horribly")
@@ -89,40 +88,33 @@ func (c checker) IsStillUsingNecessaryDataForFile(file string, city string) bool
 }
 
 func main() {
-
-	inputQueue, _ := common.InitializeRabbitQueue[WorkerStation, WorkerStation]("stationWorkers", "rabbit")
-	outputQueueMontreal, _ := common.InitializeRabbitQueue[JoinerDataStation, JoinerDataStation]("montrealQueue", "rabbit")
-	outputQueueStations, _ := common.InitializeRabbitQueue[JoinerDataStation, JoinerDataStation]("stationsQueue", "rabbit")
-	wfe, _ := common.CreateConsumerEOF("rabbit", "workerStations")
+	id := os.Getenv("id")
+	inputQueue, _ := common.InitializeRabbitQueue[WorkerStation, WorkerStation]("stationWorkers", "rabbit", id, 0)
+	outputQueueMontreal, _ := common.InitializeRabbitQueue[JoinerDataStation, JoinerDataStation]("montrealQueue", "rabbit", "", 0)
+	outputQueueStations, _ := common.InitializeRabbitQueue[JoinerDataStation, JoinerDataStation]("stationsQueue", "rabbit", "", 0)
+	v := make([]string, 2)
+	v = append(v, "montrealQueueEOF", "stationsQueueEOF")
+	iqEOF, err := common.CreateConsumerEOF(v, "stationWorkersEOF", inputQueue, 3)
+	common.FailOnError(err, "could not use consumer")
+	defer iqEOF.Close()
 	defer inputQueue.Close()
 	defer outputQueueMontreal.Close()
 	defer outputQueueStations.Close()
-	defer wfe.Close()
-
-	eofCheck := map[string]string{}
-	eofCheck["city"] = ""
-	blocker := make(chan struct{}, 1)
-	blocker <- struct{}{}
-	c := checker{data: eofCheck, blocker: blocker, filesUsed: 0, q: inputQueue}
-	go func() {
-		wfe.AnswerEofOk(c)
-	}()
 
 	oniChan := make(chan os.Signal, 1)
 	// catch SIGETRM or SIGINTERRUPT
 	signal.Notify(oniChan, syscall.SIGTERM, syscall.SIGINT)
 	go func() {
-		pCity := MontrealStation
 		for {
 			data, err := inputQueue.ReceiveMessage()
-			log.Printf("station to send is: %v\n", data)
 			if err != nil {
 				common.FailOnError(err, "Failed while receiving message")
 				continue
 			}
-			if data.City != pCity || pCity == "washington" {
-				pCity = data.City
-				blocker <- struct{}{}
+			if data.EOF {
+
+				iqEOF.AnswerEofOk(data.IdempotencyKey, nil)
+				continue
 			}
 			processData(data, outputQueueMontreal, outputQueueStations)
 		}

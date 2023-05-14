@@ -100,11 +100,6 @@ type dataToSend struct {
 	City string        `json:"city,omitempty"`
 }
 
-type EOFData struct {
-	File string `json:"file"`
-	City string `json:"city"`
-}
-
 type dataQuery struct {
 	sem  chan struct{}
 	data map[string]map[string]interface{}
@@ -160,9 +155,9 @@ func main() {
 	client := NewClient(clientConfig)
 	clientAcc := NewClient(clientConfigAcc)
 
-	queue, _ := common.InitializeRabbitQueue[dataToSend, dataToSend]("distributor", "rabbit")
-	eofStarter, _ := common.InitializeRabbitQueue[EOFData, EOFData]("eofStarter", "rabbit")
-	accumulatorInfo, _ := common.InitializeRabbitQueue[AccData, AccData]("accConnection", "rabbit")
+	queue, _ := common.InitializeRabbitQueue[dataToSend, dataToSend]("distributor", "rabbit", "", 3)
+	eofStarter, _ := common.CreatePublisher("rabbit")
+	accumulatorInfo, _ := common.InitializeRabbitQueue[AccData, AccData]("accConnection", "rabbit", "", 0)
 	cancelChan := make(chan os.Signal, 1)
 
 	defer queue.Close()
@@ -213,11 +208,12 @@ func main() {
 				continue
 			}
 			if data.EOF != nil && *data.EOF {
-				d := EOFData{
-					File: data.File,
-					City: city,
-				}
-				eofStarter.SendMessage(d)
+				d, _ := json.Marshal(common.EofData{
+					EOF:            true,
+					IdempotencyKey: fmt.Sprintf("%s-%s", city, data.File),
+				})
+				eofStarter.Publish("distributorEOF", d, "")
+				client.AnswerClient([]byte("{\"finish\": true}"))
 				eofAmount += 1
 				if eofAmount == 3 {
 					city = "toronto"
@@ -239,6 +235,7 @@ func main() {
 			if err != nil {
 				log.Errorf("error happened: %v", err)
 			}
+			client.AnswerClient([]byte("{\"continue\": true}"))
 		}
 		client.CloseConnection()
 		log.Info("connection closed")

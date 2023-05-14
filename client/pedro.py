@@ -2,7 +2,7 @@ import json
 import socket
 import time
 
-LINES_TO_SEND = 2  # It must have less than 8192 chars
+LINES_TO_SEND = 50  # It must have less than 8192 chars
 
 
 def formatSendMessage(data):
@@ -38,10 +38,20 @@ def sendCSVFile(nameFile, client):
             d = bytes(strToSend, 'utf-8')
             client.send(d)
             sent.append(strToSend)
+            receiveData(client)
         data["data"], data["eof"] = [], True
         strToSend = formatSendMessage(data)
         client.send(bytes(strToSend, 'utf-8'))
         sent.append(strToSend)
+        resServer = receiveData(client)
+        print(json.loads(resServer))
+
+
+def receiveData(sock):
+    bytesToRead = b''
+    while len(bytesToRead) < 5:
+        bytesToRead += sock.recv(5 - len(bytesToRead))
+    return sock.recv(int(bytesToRead))
 
 
 if __name__ == "__main__":
@@ -58,15 +68,13 @@ if __name__ == "__main__":
         s.connect(('localhost', 3334))
         while True:
             dataSending = formatSendMessage({"please": "give me my data"})
-            print(f"data sending is: {dataSending}")
             s.send(bytes(dataSending, 'utf-8'))
-            bytesToRead = b''
-            while len(bytesToRead) < 5:
-                bytesToRead += s.recv(5 - len(bytesToRead))
-            nextTime = s.recv(int(bytesToRead))
+            nextTime = receiveData(s)
             if len(nextTime) > 5:
                 res = json.loads(nextTime)
                 break
+            print("polling failed, waiting a little bit")
+            time.sleep(1)  # to not overload the server, this line could easily not be here
     b = time.time()
     c = b-a
     print(f"time for response is {c} and response is {res}")

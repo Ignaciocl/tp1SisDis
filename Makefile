@@ -2,7 +2,7 @@ SHELL := /bin/bash
 PWD := $(shell pwd)
 
 start-app:
-	docker-compose up -d --scale worker-station=3 --scale worker-trip=3 --scale worker-weather=3 --scale distributor=3
+	docker-compose up -d
 .PHONY: start-app
 
 stop-app:
@@ -20,3 +20,7 @@ rebuild:
 logs:
 	docker-compose logs -f
 .PHONY: logs
+
+regenerate-docker:
+	python3 addFields.py 3 3 3 3
+.PHONY: regenerate-docker

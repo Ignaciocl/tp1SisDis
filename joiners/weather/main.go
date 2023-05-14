@@ -22,12 +22,13 @@ type JoinerDataStation struct {
 	DataTrip    *ReceivableDataTrip    `json:"tripData,omitempty"`
 	Name        string                 `json:"name"`
 	Key         string                 `json:"key"`
-	EOF         bool                   `json:"EOF"`
+	common.EofData
 }
 
 type AccumulatorData struct {
-	Dur float64 `json:"durationPrect"`
+	Dur float64 `json:"duration"`
 	Key string  `json:"key"`
+	common.EofData
 }
 
 type preAccumulatorData struct {
@@ -61,85 +62,77 @@ func processData(data JoinerDataStation, accumulator map[string]weatherDuration)
 		if wd, ok := accumulator[trip.Date]; ok {
 			wd.add(trip.Duration)
 			accumulator[trip.Date] = wd
-		} else {
-			log.Printf("date of trip not found for trip %v and map of values of: %v\n", trip, accumulator)
 		}
 	}
 }
 
-type checker struct {
-	data           map[string]string
-	blocker        chan struct{}
-	tripBlocker    chan struct{}
-	weatherBlocker chan struct{}
-	wt             chan struct{}
-	tt             chan struct{}
+type actionable struct {
+	c  chan struct{}
+	nc chan struct{}
 }
 
-func (c checker) IsStillUsingNecessaryDataForFile(file string, city string) bool {
-	d := <-c.blocker
-	if file == "trips" {
-		c.tripBlocker <- d
-		c.wt <- <-c.tt
-	} else if file == "weather" {
-		c.weatherBlocker <- d
-		c.tt <- <-c.wt
-	}
-	c.blocker <- d
-	return true
+func (a actionable) DoActionIfEOF() {
+	a.nc <- <-a.c // continue the loop
 }
 
 func main() {
-	inputQueue, _ := common.InitializeRabbitQueue[JoinerDataStation, JoinerDataStation]("weatherQueue", "rabbit")
-	inputTrips, _ := common.InitializeRabbitQueue[JoinerDataStation, JoinerDataStation]("weatherQueueTrip", "rabbit")
-	aq, _ := common.InitializeRabbitQueue[AccumulatorData, AccumulatorData]("accumulator", "rabbit")
-	wfe, _ := common.CreateConsumerEOF("rabbit", "joinerWeather")
+	inputQueue, _ := common.InitializeRabbitQueue[JoinerDataStation, JoinerDataStation]("weatherQueue", "rabbit", "", 0)
+	inputTrips, _ := common.InitializeRabbitQueue[JoinerDataStation, JoinerDataStation]("weatherQueueTrip", "rabbit", "", 0)
+	aq, _ := common.InitializeRabbitQueue[AccumulatorData, AccumulatorData]("accumulator", "rabbit", "", 0)
+	wqEOF, _ := common.CreateConsumerEOF(nil, "weatherQueueEOF", inputQueue, 3)
+	tqEOF, _ := common.CreateConsumerEOF(nil, "weatherQueueTripEOF", inputTrips, 3)
 	oniChan := make(chan os.Signal, 1)
+	defer wqEOF.Close()
+	defer tqEOF.Close()
 	defer inputQueue.Close()
 	defer aq.Close()
-	defer wfe.Close()
 	defer inputTrips.Close()
 	// catch SIGETRM or SIGINTERRUPT
 	signal.Notify(oniChan, syscall.SIGTERM, syscall.SIGINT)
-	eofCheck := map[string]string{}
-	eofCheck["city"] = ""
-	blocker := make(chan struct{}, 1)
-	tb := make(chan struct{}, 1)
-	wb := make(chan struct{}, 1)
-	tripTurn := make(chan struct{}, 0)
+	tripTurn := make(chan struct{}, 1)
 	weatherTurn := make(chan struct{}, 1)
-	blocker <- struct{}{}
-	c := checker{data: eofCheck, blocker: blocker, weatherBlocker: wb, tripBlocker: tb, wt: weatherTurn, tt: tripTurn}
-	go func() {
-		wfe.AnswerEofOk(c)
-	}()
+	ns := make(chan struct{}, 1)
+	weatherTurn <- struct{}{}
 	acc := make(map[string]weatherDuration)
+	o := 0
 	go func() {
 		for {
-			s := <-weatherTurn
 			data, err := inputQueue.ReceiveMessage()
-			d := <-blocker
+			if data.EOF {
+				wqEOF.AnswerEofOk(data.IdempotencyKey, actionable{
+					c:  weatherTurn,
+					nc: tripTurn,
+				})
+				continue
+			}
+			s := <-weatherTurn
 			if err != nil {
 				common.FailOnError(err, "Failed while receiving message")
 				continue
 			}
 			processData(data, acc)
-			blocker <- d
+			o += 1
 			weatherTurn <- s
 		}
 	}() // For weather
 
 	go func() {
 		for {
-			s := <-tripTurn
 			data, err := inputTrips.ReceiveMessage()
-			d := <-blocker
+			if data.EOF {
+				tqEOF.AnswerEofOk(data.IdempotencyKey, actionable{
+					c:  tripTurn,
+					nc: ns,
+				})
+				continue
+			}
+			s := <-tripTurn
 			if err != nil {
 				common.FailOnError(err, "Failed while receiving message")
 				continue
 			}
 			processData(data, acc)
-			blocker <- d
+			o += 1
 			tripTurn <- s
 		}
 	}() // For weather
@@ -150,9 +143,7 @@ func main() {
 			Amount:      0,
 		}
 		for i := 0; i < 3; i += 1 {
-			<-wb
-			<-tb
-			<-blocker
+			<-ns
 			v := weatherDuration{
 				total:    0,
 				duration: 0,
@@ -162,14 +153,33 @@ func main() {
 			}
 			d.DurGathered += v.duration
 			d.Amount += v.total
+
 			acc = make(map[string]weatherDuration, 0)
-			<-blocker
+			if i != 2 {
+				weatherTurn <- struct{}{}
+			}
 		}
-		l := AccumulatorData{
-			Dur: float64(d.DurGathered) / float64(d.Amount),
-			Key: "random",
+		var l AccumulatorData
+		if d.Amount == 0 {
+			l = AccumulatorData{
+				Dur: 0,
+				Key: "random",
+			}
+		} else {
+			l = AccumulatorData{
+				Dur: float64(d.DurGathered) / float64(d.Amount),
+				Key: "random",
+			}
 		}
+		log.Printf("amount got and duration: %d, %d amount of messages received %d", d.Amount, d.DurGathered, o)
 		_ = aq.SendMessage(l)
+		eof := AccumulatorData{EofData: common.EofData{
+			EOF:            true,
+			IdempotencyKey: "random",
+		},
+		}
+		aq.SendMessage(eof)
+		weatherTurn <- struct{}{}
 	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")

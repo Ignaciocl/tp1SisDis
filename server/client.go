@@ -126,7 +126,6 @@ func (c *Client) AnswerClient(bytes []byte) error {
 	bytesToSend := append(bytesAmount, bytes...)
 	eightKB := 8 * 1024
 	size = len(bytesToSend)
-	log.Infof("client send a message with %v", string(bytesToSend))
 	for i := 0; i <= len(bytesToSend); i += eightKB {
 		var sending []byte
 		if size < i+eightKB {
@@ -143,7 +142,6 @@ func (c *Client) AnswerClient(bytes []byte) error {
 			i -= dif
 		}
 	}
-	log.Infof("client was answered with %v", string(bytesToSend))
 	return nil
 }
 
@@ -156,7 +154,6 @@ func (c *Client) ReceiveData() ([]byte, error) {
 		if err != nil {
 			log.Infof("error while reading is %v", err)
 		}
-		log.Infof("bytes read: %s", string(bytesToRead))
 		j := i
 		remaining := sizeToRead
 		for {
