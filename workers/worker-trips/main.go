@@ -52,30 +52,6 @@ type JoinerData[T any] struct {
 
 const MontrealStation = "montreal"
 
-type checker struct {
-	data      map[string]string
-	blocker   chan struct{}
-	q         common.Queue[WorkerTrip, WorkerTrip]
-	filesUsed int
-}
-
-func (c checker) IsStillUsingNecessaryDataForFile(file string, city string) bool {
-	if c.q.IsEmpty() {
-		return true
-	}
-	if city != "washington" {
-		<-c.blocker
-	} else {
-		for {
-			<-c.blocker
-			if c.q.IsEmpty() {
-				break
-			}
-		}
-	}
-	return true
-}
-
 func processData(
 	trip WorkerTrip,
 	qm common.Queue[JoinerData[SendableDataMontreal], JoinerData[SendableDataMontreal]],

@@ -17,7 +17,7 @@ func getDate(date string) string {
 	if err != nil {
 		common.FailOnError(err, "Invalid date while parsing")
 	}
-	return strings.Split(d.AddDate(0, 0, 0).String(), " ")[0]
+	return strings.Split(d.AddDate(0, 0, -1).String(), " ")[0]
 }
 
 type Weather struct {
@@ -63,27 +63,6 @@ func processData(
 		common.FailOnError(err, "Couldn't send message to joiner stations, failing horribly")
 		// ToDo implement shutDown manager
 	}
-}
-
-type checker struct {
-	data      map[string]string
-	blocker   chan struct{}
-	q         common.Queue[WorkerWeather, WorkerWeather]
-	filesUsed int
-}
-
-func (c checker) IsStillUsingNecessaryDataForFile(file string, city string) bool {
-	if city != "washington" {
-		<-c.blocker
-	} else {
-		for {
-			<-c.blocker
-			if c.q.IsEmpty() {
-				break
-			}
-		}
-	}
-	return true
 }
 
 func main() {
