@@ -47,7 +47,7 @@ type JoinerData struct {
 func processData(
 	weather WorkerWeather,
 	qt common.Queue[JoinerData, JoinerData]) {
-	if weather.Data.Prec < 1 {
+	if weather.Data.Prec < 60 {
 		return
 	}
 	d := JoinerData{

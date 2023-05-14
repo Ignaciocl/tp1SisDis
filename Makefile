@@ -22,5 +22,5 @@ logs:
 .PHONY: logs
 
 regenerate-docker:
-	python3 addFields.py 3 3 3 3
+	python3 addFields.py 3 3 3 3 3
 .PHONY: regenerate-docker

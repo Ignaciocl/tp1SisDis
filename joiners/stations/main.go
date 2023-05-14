@@ -21,7 +21,7 @@ type ReceivableDataTrip struct {
 
 type JoinerDataStation struct {
 	DataStation *ReceivableDataStation `json:"stationData,omitempty"`
-	DataTrip    *ReceivableDataTrip    `json:"tripData,omitempty"`
+	DataTrip    *[]ReceivableDataTrip  `json:"tripData,omitempty"`
 	Name        string                 `json:"name"`
 	Key         string                 `json:"key"`
 	common.EofData
@@ -66,18 +66,20 @@ func processData(data JoinerDataStation, w *weird) {
 		sData, _ := getStationData(station.Code, accumulator)
 		sData.name = station.Name
 		accumulator[station.Code] = sData
-	} else if trip := data.DataTrip; trip != nil {
-		dStation, err := getStationData(trip.Station, accumulator)
-		if err != nil {
+	} else if trips := data.DataTrip; trips != nil {
+		for _, trip := range *trips {
+			dStation, err := getStationData(trip.Station, accumulator)
+			if err != nil {
 
-			return
+				return
+			}
+			if trip.Year == 2016 {
+				dStation.sweetSixteen += 1
+			} else if trip.Year == 2017 {
+				dStation.sadSeventeen += 1
+			}
+			accumulator[trip.Station] = dStation
 		}
-		if trip.Year == 2016 {
-			dStation.sweetSixteen += 1
-		} else if trip.Year == 2017 {
-			dStation.sadSeventeen += 1
-		}
-		accumulator[trip.Station] = dStation
 	}
 }
 

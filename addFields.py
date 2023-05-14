@@ -1,7 +1,7 @@
 import yaml
 import sys
 
-FIELDS_TO_ESCALATE = ['worker-station', 'worker-trip', 'worker-weather', 'distributor']
+FIELDS_TO_ESCALATE = ['worker-station', 'worker-trip', 'worker-weather', 'distributor', 'calculator']
 
 
 def isInField(s):
@@ -11,7 +11,7 @@ def isInField(s):
     return False
 
 
-def addClients(services: dict, stations, trips, weather, distributors):
+def addClients(services: dict, stations, trips, weather, distributors, calculators):
     keys = services.keys()
     copyKeys = []
     for k in keys:
@@ -23,7 +23,6 @@ def addClients(services: dict, stations, trips, weather, distributors):
         clientId = i + 1
         services[f'worker-station{clientId}'] = {
             'container_name': f'worker-station{clientId}',
-            'image': 'client:latest',
             'build': {'context': './workers/worker-stations'},
             'environment':
                 [f'id={clientId}'],
@@ -35,7 +34,6 @@ def addClients(services: dict, stations, trips, weather, distributors):
         clientId = i + 1
         services[f'worker-trip{clientId}'] = {
             'container_name': f'worker-trip{clientId}',
-            'image': 'client:latest',
             'build': {'context': './workers/worker-trips'},
             'environment':
                 [f'id={clientId}'],
@@ -47,7 +45,6 @@ def addClients(services: dict, stations, trips, weather, distributors):
         clientId = i + 1
         services[f'worker-weather{clientId}'] = {
             'container_name': f'worker-weather{clientId}',
-            'image': 'client:latest',
             'build': {'context': './workers/worker-weather'},
             'environment':
                 [f'id={clientId}'],
@@ -59,13 +56,23 @@ def addClients(services: dict, stations, trips, weather, distributors):
         clientId = i + 1
         services[f'distributor{clientId}'] = {
             'container_name': f'distributor{clientId}',
-            'image': 'client:latest',
             'build': {'context': './distributor'},
             'environment':
                 [f'id={clientId}'],
             'networks': ['bikers'],
             'depends_on': {'rabbit': {'condition': 'service_healthy'}},
             'volumes': ['./distributor/main.go/:/app/main.go']
+        }
+    for i in range(calculators):
+        clientId = i + 1
+        services[f'calculator{clientId}'] = {
+            'container_name': f'calculator{clientId}',
+            'build': {'context': './calculator'},
+            'environment':
+                [f'id={clientId}'],
+            'networks': ['bikers'],
+            'depends_on': {'rabbit': {'condition': 'service_healthy'}},
+            'volumes': ['./calculator/main.go/:/app/main.go']
         }
 
 
@@ -74,16 +81,16 @@ def isValidParam(p):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 5:
-        print(f'missing parameters, required 4 received: {len(sys.argv) - 1}')
+    if len(sys.argv) < 6:
+        print(f'missing parameters, required 5 received: {len(sys.argv) - 1}')
         exit(1)
-    _, stations, trips, weather, distributors = sys.argv
+    _, stations, trips, weather, distributors, calculator = sys.argv
     if not (isValidParam(stations) and isValidParam(trips) and isValidParam(weather) and isValidParam(distributors)):
         print('wrong amount of something, all should be number')
         exit(1)
     info = {}
     with open('docker-compose.yml', 'r') as f:
         info = yaml.load(f, Loader=yaml.FullLoader)
-    addClients(info['services'], int(stations), int(trips), int(weather), int(distributors))
+    addClients(info['services'], int(stations), int(trips), int(weather), int(distributors), int(calculator))
     with open('docker-compose.yml', 'w') as f:
         yaml.dump(info, f)

@@ -2,7 +2,7 @@ import json
 import socket
 import time
 
-LINES_TO_SEND = 50  # It must have less than 8192 chars
+LINES_TO_SEND = 15  # It must have less than 8192 chars
 
 
 def formatSendMessage(data):

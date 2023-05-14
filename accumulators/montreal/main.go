@@ -25,6 +25,10 @@ func (d *dStation) didItWentMoreThan(distanceAvg float64) bool {
 type AccumulatorData struct {
 	EndingStation string  `json:"ending_station"`
 	Distance      float64 `json:"distance"`
+}
+
+type AccumulatorInfo struct {
+	Data []AccumulatorData `json:"data"`
 	common.EofData
 }
 
@@ -56,9 +60,9 @@ func (a actionable) DoActionIfEOF() {
 }
 
 func main() {
-	inputQueue, _ := common.InitializeRabbitQueue[AccumulatorData, AccumulatorData]("preAccumulatorMontreal", "rabbit", "", 0)
+	inputQueue, _ := common.InitializeRabbitQueue[AccumulatorInfo, AccumulatorInfo]("preAccumulatorMontreal", "rabbit", "", 0)
 	outputQueue, _ := common.InitializeRabbitQueue[Accumulator, Accumulator]("accumulator", "rabbit", "", 0)
-	me, _ := common.CreateConsumerEOF(nil, "preAccumulatorMontrealEOF", inputQueue, 1)
+	me, _ := common.CreateConsumerEOF(nil, "preAccumulatorMontrealEOF", inputQueue, 3)
 	defer me.Close()
 	defer inputQueue.Close()
 	defer outputQueue.Close()
@@ -69,12 +73,12 @@ func main() {
 	acc := make(map[string]dStation)
 	go func() {
 		for {
-			data, err := inputQueue.ReceiveMessage()
-			if data.EOF {
+			dataInfo, err := inputQueue.ReceiveMessage()
+			if dataInfo.EOF {
 
-				me.AnswerEofOk(data.IdempotencyKey, actionable{
+				me.AnswerEofOk(dataInfo.IdempotencyKey, actionable{
 					nc:   eof,
-					data: data.EofData,
+					data: dataInfo.EofData,
 				})
 				continue
 			}
@@ -83,7 +87,9 @@ func main() {
 				common.FailOnError(err, "Failed while receiving message")
 				continue
 			}
-			processData(data, acc)
+			for _, d := range dataInfo.Data {
+				processData(d, acc)
+			}
 		}
 	}()
 	go func() {

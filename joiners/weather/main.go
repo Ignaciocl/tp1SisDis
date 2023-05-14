@@ -19,7 +19,7 @@ type ReceivableDataTrip struct {
 
 type JoinerDataStation struct {
 	DataWeather *ReceivableDataWeather `json:"weatherData,omitempty"`
-	DataTrip    *ReceivableDataTrip    `json:"tripData,omitempty"`
+	DataTrip    *[]ReceivableDataTrip  `json:"tripData,omitempty"`
 	Name        string                 `json:"name"`
 	Key         string                 `json:"key"`
 	common.EofData
@@ -58,10 +58,12 @@ func processData(data JoinerDataStation, accumulator map[string]weatherDuration)
 			duration: 0,
 		}
 		accumulator[weather.Date] = w
-	} else if trip := data.DataTrip; trip != nil {
-		if wd, ok := accumulator[trip.Date]; ok {
-			wd.add(trip.Duration)
-			accumulator[trip.Date] = wd
+	} else if trips := data.DataTrip; trips != nil {
+		for _, trip := range *trips {
+			if wd, ok := accumulator[trip.Date]; ok {
+				wd.add(trip.Duration)
+				accumulator[trip.Date] = wd
+			}
 		}
 	}
 }

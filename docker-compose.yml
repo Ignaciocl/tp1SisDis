@@ -24,6 +24,45 @@ services:
     - bikers
     volumes:
     - ./accumulators/montreal/main.go/:/app/main.go
+  calculator1:
+    build:
+      context: ./calculator
+    container_name: calculator1
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+    - id=1
+    networks:
+    - bikers
+    volumes:
+    - ./calculator/main.go/:/app/main.go
+  calculator2:
+    build:
+      context: ./calculator
+    container_name: calculator2
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+    - id=2
+    networks:
+    - bikers
+    volumes:
+    - ./calculator/main.go/:/app/main.go
+  calculator3:
+    build:
+      context: ./calculator
+    container_name: calculator3
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+    - id=3
+    networks:
+    - bikers
+    volumes:
+    - ./calculator/main.go/:/app/main.go
   distributor1:
     build:
       context: ./distributor
@@ -33,7 +72,6 @@ services:
         condition: service_healthy
     environment:
     - id=1
-    image: client:latest
     networks:
     - bikers
     volumes:
@@ -47,7 +85,6 @@ services:
         condition: service_healthy
     environment:
     - id=2
-    image: client:latest
     networks:
     - bikers
     volumes:
@@ -61,7 +98,6 @@ services:
         condition: service_healthy
     environment:
     - id=3
-    image: client:latest
     networks:
     - bikers
     volumes:
@@ -137,7 +173,6 @@ services:
         condition: service_healthy
     environment:
     - id=1
-    image: client:latest
     networks:
     - bikers
     volumes:
@@ -151,7 +186,6 @@ services:
         condition: service_healthy
     environment:
     - id=2
-    image: client:latest
     networks:
     - bikers
     volumes:
@@ -165,7 +199,6 @@ services:
         condition: service_healthy
     environment:
     - id=3
-    image: client:latest
     networks:
     - bikers
     volumes:
@@ -179,7 +212,6 @@ services:
         condition: service_healthy
     environment:
     - id=1
-    image: client:latest
     networks:
     - bikers
     volumes:
@@ -193,7 +225,6 @@ services:
         condition: service_healthy
     environment:
     - id=2
-    image: client:latest
     networks:
     - bikers
     volumes:
@@ -207,7 +238,6 @@ services:
         condition: service_healthy
     environment:
     - id=3
-    image: client:latest
     networks:
     - bikers
     volumes:
@@ -221,7 +251,6 @@ services:
         condition: service_healthy
     environment:
     - id=1
-    image: client:latest
     networks:
     - bikers
     volumes:
@@ -235,7 +264,6 @@ services:
         condition: service_healthy
     environment:
     - id=2
-    image: client:latest
     networks:
     - bikers
     volumes:
@@ -249,7 +277,6 @@ services:
         condition: service_healthy
     environment:
     - id=3
-    image: client:latest
     networks:
     - bikers
     volumes:

@@ -23,6 +23,13 @@ type SendableData struct {
 	EOF  bool        `json:"EOF"`
 }
 
+type SendableDataTrip struct {
+	City string        `json:"city"`
+	Data []interface{} `json:"data,omitempty"` // Why would i decompress here? it is just a distributor
+	Key  string        `json:"key"`
+	EOF  bool          `json:"EOF"`
+}
+
 func SendMessagesToQueue(data []interface{}, queue common.Queue[SendableData, SendableData], city string) {
 	for _, v := range data {
 		err := queue.SendMessage(SendableData{
@@ -41,7 +48,7 @@ func main() {
 	id := os.Getenv("id")
 	inputQueue, _ := common.InitializeRabbitQueue[receivedData, receivedData]("distributor", "rabbit", id, 0)
 	wq, _ := common.InitializeRabbitQueue[SendableData, SendableData]("weatherWorkers", "rabbit", "", 3)
-	tq, _ := common.InitializeRabbitQueue[SendableData, SendableData]("tripWorkers", "rabbit", "", 3)
+	tq, _ := common.InitializeRabbitQueue[SendableDataTrip, SendableDataTrip]("tripWorkers", "rabbit", "", 3)
 	sq, _ := common.InitializeRabbitQueue[SendableData, SendableData]("stationWorkers", "rabbit", "", 3)
 	wqe, _ := common.CreateConsumerEOF([]string{"weatherWorkersEOF"}, "distributorEOF", inputQueue, 1)
 	tqe, _ := common.CreateConsumerEOF([]string{"tripWorkersEOF"}, "distributorEOF", inputQueue, 1)
@@ -83,11 +90,18 @@ func main() {
 				pFile = data.File
 				if pFile == "weather" {
 					queue = wq
-				} else if pFile == "trips" {
-					queue = tq
 				} else if pFile == "stations" {
 					queue = sq
 				}
+			}
+			if pFile == "trips" {
+				tq.SendMessage(SendableDataTrip{
+					City: data.City,
+					Data: data.Data,
+					Key:  "random",
+					EOF:  false,
+				})
+				continue
 			}
 			SendMessagesToQueue(data.Data, queue, data.City)
 		}

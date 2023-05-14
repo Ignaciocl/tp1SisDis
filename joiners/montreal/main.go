@@ -2,15 +2,11 @@ package main
 
 import (
 	common "github.com/Ignaciocl/tp1SisdisCommons"
-	lasPistasDeBlue "github.com/umahmood/haversine"
 	"log"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 )
-
-var StationEof = false
 
 type SendableDataStation struct {
 	Code      string `json:"code"`
@@ -23,12 +19,9 @@ type SendableDataTrip struct {
 	OStation string `json:"o_station"`
 	EStation string `json:"e_station"`
 }
-
-var TRIPS = make([]SendableDataTrip, 0)
-
 type JoinerDataStation struct {
 	DataStation *SendableDataStation `json:"stationData,omitempty"`
-	DataTrip    *SendableDataTrip    `json:"tripData,omitempty"`
+	DataTrip    *[]SendableDataTrip  `json:"tripData,omitempty"`
 	Name        string               `json:"name,omitempty"`
 	Key         string               `json:"key,omitempty"`
 	common.EofData
@@ -40,67 +33,51 @@ type sData struct {
 	Name string
 }
 
-func (o sData) calcDistance(f sData) (float64, error) {
-	oLong, err := strconv.ParseFloat(o.Long, 8)
-	if err != nil {
-		return 0, err
-	}
-	oLat, err := strconv.ParseFloat(o.Lat, 8)
-	if err != nil {
-		return 0, err
-	}
-	fLong, err := strconv.ParseFloat(f.Long, 8)
-	if err != nil {
-		return 0, err
-	}
-	fLat, err := strconv.ParseFloat(f.Lat, 8)
-	if err != nil {
-		return 0, err
-	}
-	origin := lasPistasDeBlue.Coord{
-		Lat: oLat,
-		Lon: oLong,
-	}
-	destiny2TheRevengeOfDestiny := lasPistasDeBlue.Coord{
-		Lat: fLat,
-		Lon: fLong,
-	}
-	_, km := lasPistasDeBlue.Distance(origin, destiny2TheRevengeOfDestiny)
-	return km, nil
-}
-
 type AccumulatorData struct {
-	EndingStation string  `json:"ending_station"`
-	Distance      float64 `json:"distance"`
-	EOF           bool    `json:"eof,omitempty"`
+	OLat  string `json:"o_lat"`
+	OLong string `json:"o_long"`
+	FLat  string `json:"f_lat"`
+	FLong string `json:"f_long"`
+	Name  string `json:"name"`
 }
 
-func processData(station JoinerDataStation, accumulator map[string]sData, aq common.Queue[AccumulatorData, AccumulatorData]) {
+type AccumulatorInfo struct {
+	Data []AccumulatorData `json:"data"`
+	common.EofData
+}
+
+func processData(station JoinerDataStation, accumulator map[string]sData, aq common.Queue[AccumulatorInfo, AccumulatorInfo]) {
 	if s := station.DataStation; s != nil {
 		accumulator[station.DataStation.Code] = sData{Long: station.DataStation.Longitude, Lat: station.DataStation.Latitude, Name: station.DataStation.Name}
 	} else if trip := station.DataTrip; trip != nil {
-		SendInfo(accumulator, *trip, aq)
+		t := *trip
+		vToSend := make([]AccumulatorData, 0, len(t))
+		for _, v := range *trip {
+			if d, ok := obtainInfoToSend(accumulator, v); ok {
+				vToSend = append(vToSend, d)
+			}
+		}
+		aq.SendMessage(AccumulatorInfo{
+			Data: vToSend,
+		})
 	}
 }
 
-func SendInfo(accumulator map[string]sData, trip SendableDataTrip, aq common.Queue[AccumulatorData, AccumulatorData]) bool {
+func obtainInfoToSend(accumulator map[string]sData, trip SendableDataTrip) (AccumulatorData, bool) {
+	var ad AccumulatorData
 	dOStation, ok := accumulator[trip.OStation]
 	dEStation, oke := accumulator[trip.EStation]
 	if !(ok && oke) {
-		return true
+		return ad, false
 	}
-	distance, err := dOStation.calcDistance(dEStation)
-	if err != nil {
-		return true
-	}
+	return AccumulatorData{
+		OLat:  dOStation.Lat,
+		OLong: dOStation.Long,
+		FLat:  dEStation.Lat,
+		FLong: dEStation.Long,
+		Name:  dEStation.Name,
+	}, true
 
-	if err := aq.SendMessage(AccumulatorData{
-		EndingStation: dEStation.Name,
-		Distance:      distance,
-	}); err != nil {
-		common.FailOnError(err, "some error happened while sending")
-	}
-	return false
 }
 
 type actionable struct {
@@ -115,9 +92,9 @@ func (a actionable) DoActionIfEOF() {
 func main() {
 	inputQueue, _ := common.InitializeRabbitQueue[JoinerDataStation, JoinerDataStation]("montrealQueue", "rabbit", "", 0)
 	inputQueueTrip, _ := common.InitializeRabbitQueue[JoinerDataStation, JoinerDataStation]("montrealQueueTrip", "rabbit", "", 0)
-	aq, _ := common.InitializeRabbitQueue[AccumulatorData, AccumulatorData]("preAccumulatorMontreal", "rabbit", "", 0)
+	aq, _ := common.InitializeRabbitQueue[AccumulatorInfo, AccumulatorInfo]("calculatorMontreal", "rabbit", "", 3)
 	sfe, _ := common.CreateConsumerEOF(nil, "montrealQueueEOF", inputQueue, 3)
-	tfe, _ := common.CreateConsumerEOF([]string{"preAccumulatorMontrealEOF"}, "montrealQueueTripEOF", inputQueueTrip, 3)
+	tfe, _ := common.CreateConsumerEOF([]string{"calculatorMontrealEOF"}, "montrealQueueTripEOF", inputQueueTrip, 3)
 	defer inputQueue.Close()
 	defer aq.Close()
 	defer inputQueueTrip.Close()

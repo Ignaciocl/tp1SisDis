@@ -23,7 +23,7 @@ type Trip struct {
 
 type WorkerTrip struct {
 	City string `json:"city"`
-	Data Trip   `json:"data,omitempty"`
+	Data []Trip `json:"data,omitempty"`
 	Key  string `json:"key"`
 	common.EofData
 }
@@ -44,7 +44,7 @@ type SendableDataWeather struct {
 }
 
 type JoinerData[T any] struct {
-	Data T      `json:"tripData"`
+	Data []T    `json:"tripData"`
 	Key  string `json:"key"`
 	EOF  bool   `json:"EOF"`
 	City string `json:"city,omitempty"`
@@ -57,44 +57,55 @@ func processData(
 	qm common.Queue[JoinerData[SendableDataMontreal], JoinerData[SendableDataMontreal]],
 	qs common.Queue[JoinerData[SendableDataAvg], JoinerData[SendableDataAvg]],
 	qt common.Queue[JoinerData[SendableDataWeather], JoinerData[SendableDataWeather]]) {
+	buildMontreal := trip.City == MontrealStation
+	batchSize := len(trip.Data)
+	vm := make([]SendableDataMontreal, 0, batchSize)
+	vy := make([]SendableDataAvg, 0, batchSize)
+	va := make([]SendableDataWeather, 0, batchSize)
+	for _, v := range trip.Data {
+		if buildMontreal {
+			vm = append(vm, SendableDataMontreal{
+				OStation: v.OStation,
+				EStation: v.EStation,
+			})
+		}
+		if v.Year == 2016 || v.Year == 2017 {
+			vy = append(vy, SendableDataAvg{
+				Station: v.OStation,
+				Year:    v.Year,
+			})
+		}
+		va = append(va, SendableDataWeather{
+			Duration: int32(v.Duration),
+			Date:     getDate(v.Date),
+		})
+	}
+
 	if trip.City == MontrealStation {
 		err := qm.SendMessage(JoinerData[SendableDataMontreal]{
-			Key: trip.Key,
-			EOF: trip.EOF,
-			Data: SendableDataMontreal{
-				OStation: trip.Data.OStation,
-				EStation: trip.Data.EStation,
-			},
+			Key:  trip.Key,
+			EOF:  trip.EOF,
+			Data: vm,
 		})
 		if err != nil {
 			common.FailOnError(err, "Couldn't send message to joiner montreal, failing horribly")
 			// ToDo implement shutDown manager
 		}
 	}
-
-	if trip.Data.Year == 2016 || trip.Data.Year == 2017 {
-		d := SendableDataAvg{
-			Station: trip.Data.OStation,
-			Year:    trip.Data.Year,
-		}
-		err := qs.SendMessage(JoinerData[SendableDataAvg]{
-			Key:  trip.Key,
-			EOF:  trip.EOF,
-			Data: d,
-		})
-		if err != nil {
-			common.FailOnError(err, "Couldn't send message to joiner stations, failing horribly")
-			// ToDo implement shutDown manager
-		}
+	err := qs.SendMessage(JoinerData[SendableDataAvg]{
+		Key:  trip.Key,
+		EOF:  trip.EOF,
+		Data: vy,
+	})
+	if err != nil {
+		common.FailOnError(err, "Couldn't send message to joiner stations, failing horribly")
+		// ToDo implement shutDown manager
 	}
-	err := qt.SendMessage(JoinerData[SendableDataWeather]{
+	err = qt.SendMessage(JoinerData[SendableDataWeather]{
 		Key:  trip.Key,
 		EOF:  trip.EOF,
 		City: trip.City,
-		Data: SendableDataWeather{
-			Duration: int32(trip.Data.Duration),
-			Date:     getDate(trip.Data.Date),
-		},
+		Data: va,
 	})
 	if err != nil {
 		common.FailOnError(err, "Couldn't send message to joiner stations, failing horribly")
