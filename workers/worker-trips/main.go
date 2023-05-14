@@ -120,9 +120,18 @@ func main() {
 	outputQueueMontreal, _ := common.InitializeRabbitQueue[JoinerData[SendableDataMontreal], JoinerData[SendableDataMontreal]]("montrealQueueTrip", "rabbit", "", 0)
 	outputQueueStations, _ := common.InitializeRabbitQueue[JoinerData[SendableDataAvg], JoinerData[SendableDataAvg]]("stationsQueueTrip", "rabbit", "", 0)
 	outputQueueWeather, _ := common.InitializeRabbitQueue[JoinerData[SendableDataWeather], JoinerData[SendableDataWeather]]("weatherQueueTrip", "rabbit", "", 0)
-	v := make([]string, 3)
-	v = append(v, "montrealQueueTripEOF", "stationsQueueTripEOF", "weatherQueueTripEOF")
-	iqEOF, _ := common.CreateConsumerEOF(v, "tripWorkersEOF", inputQueue, 3)
+	v := make([]common.NextToNotify, 0, 3)
+	v = append(v, common.NextToNotify{
+		Name:       "montrealQueueTrip",
+		Connection: outputQueueMontreal,
+	}, common.NextToNotify{
+		Name:       "stationsQueueTrip",
+		Connection: outputQueueStations,
+	}, common.NextToNotify{
+		Name:       "weatherQueueTrip",
+		Connection: outputQueueWeather,
+	})
+	iqEOF, _ := common.CreateConsumerEOF(v, "tripWorkers", inputQueue, 3)
 	defer iqEOF.Close()
 	defer inputQueue.Close()
 	defer outputQueueMontreal.Close()

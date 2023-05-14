@@ -156,7 +156,7 @@ func main() {
 	clientAcc := NewClient(clientConfigAcc)
 
 	queue, _ := common.InitializeRabbitQueue[dataToSend, dataToSend]("distributor", "rabbit", "", 3)
-	eofStarter, _ := common.CreatePublisher("rabbit")
+	eofStarter, _ := common.CreatePublisher("rabbit", queue)
 	accumulatorInfo, _ := common.InitializeRabbitQueue[AccData, AccData]("accConnection", "rabbit", "", 0)
 	cancelChan := make(chan os.Signal, 1)
 
@@ -212,8 +212,8 @@ func main() {
 					EOF:            true,
 					IdempotencyKey: fmt.Sprintf("%s-%s", city, data.File),
 				})
-				eofStarter.Publish("distributorEOF", d, "")
-				//client.AnswerClient([]byte("{\"finish\": true}"))
+				eofStarter.Publish("distributor", d, "eof", "topic")
+				client.AnswerClient([]byte("{\"finish\": true}"))
 				eofAmount += 1
 				if eofAmount == 3 {
 					city = "toronto"
@@ -235,7 +235,7 @@ func main() {
 			if err != nil {
 				log.Errorf("error happened: %v", err)
 			}
-			//client.AnswerClient([]byte("{\"continue\": true}"))
+			client.AnswerClient([]byte("{\"continue\": true}"))
 		}
 		client.CloseConnection()
 		log.Info("connection closed")

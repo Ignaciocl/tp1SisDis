@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
 	log "github.com/sirupsen/logrus"
 	"os"
@@ -93,9 +92,15 @@ func main() {
 	inputQueue, _ := common.InitializeRabbitQueue[WorkerStation, WorkerStation]("stationWorkers", "rabbit", id, 0)
 	outputQueueMontreal, _ := common.InitializeRabbitQueue[JoinerDataStation, JoinerDataStation]("montrealQueue", "rabbit", "", 0)
 	outputQueueStations, _ := common.InitializeRabbitQueue[JoinerDataStation, JoinerDataStation]("stationsQueue", "rabbit", "", 0)
-	v := make([]string, 2)
-	v = append(v, "montrealQueueEOF", "stationsQueueEOF")
-	iqEOF, err := common.CreateConsumerEOF(v, "stationWorkersEOF", inputQueue, 3)
+	v := make([]common.NextToNotify, 2)
+	v = append(v, common.NextToNotify{
+		Name:       "montrealQueue",
+		Connection: outputQueueMontreal,
+	}, common.NextToNotify{
+		Name:       "stationsQueue",
+		Connection: outputQueueStations,
+	})
+	iqEOF, err := common.CreateConsumerEOF(v, "stationWorkers", inputQueue, 3)
 	common.FailOnError(err, "could not use consumer")
 	defer iqEOF.Close()
 	defer inputQueue.Close()
@@ -103,6 +108,7 @@ func main() {
 	defer outputQueueStations.Close()
 
 	oniChan := make(chan os.Signal, 1)
+	eofReceived := 0
 	// catch SIGETRM or SIGINTERRUPT
 	signal.Notify(oniChan, syscall.SIGTERM, syscall.SIGINT)
 	go func() {
@@ -113,9 +119,13 @@ func main() {
 				continue
 			}
 			if data.EOF {
+				eofReceived += 1
 				log.Infof("eof received to be triggered: %v", data)
-				iqEOF.AnswerEofOk(fmt.Sprintf("%s-%s", data.IdempotencyKey, id), nil)
+				iqEOF.AnswerEofOk(data.IdempotencyKey, nil)
 				continue
+			}
+			if eofReceived >= 3 {
+				log.Infof("MESSAGE BEING RECEIVED AFTER: %v", data)
 			}
 			processData(data, outputQueueMontreal, outputQueueStations)
 		}

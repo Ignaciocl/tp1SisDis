@@ -2,7 +2,7 @@ package main
 
 import (
 	common "github.com/Ignaciocl/tp1SisdisCommons"
-	"log"
+	log "github.com/sirupsen/logrus"
 	"os"
 	"os/signal"
 	"strings"
@@ -50,15 +50,16 @@ func main() {
 	wq, _ := common.InitializeRabbitQueue[SendableData, SendableData]("weatherWorkers", "rabbit", "", 3)
 	tq, _ := common.InitializeRabbitQueue[SendableDataTrip, SendableDataTrip]("tripWorkers", "rabbit", "", 3)
 	sq, _ := common.InitializeRabbitQueue[SendableData, SendableData]("stationWorkers", "rabbit", "", 3)
-	wqe, _ := common.CreateConsumerEOF([]string{"weatherWorkersEOF"}, "distributorEOF", inputQueue, 1)
-	tqe, _ := common.CreateConsumerEOF([]string{"tripWorkersEOF"}, "distributorEOF", inputQueue, 1)
-	sqe, _ := common.CreateConsumerEOF([]string{"stationWorkersEOF"}, "distributorEOF", inputQueue, 1)
+	wqe, _ := common.CreateConsumerEOF([]common.NextToNotify{{Name: "weatherWorkers", Connection: wq}}, "distributor", inputQueue, 1)
+	tqe, _ := common.CreateConsumerEOF([]common.NextToNotify{{Name: "tripWorkers", Connection: tq}}, "distributor", inputQueue, 1)
+	sqe, _ := common.CreateConsumerEOF([]common.NextToNotify{{Name: "stationWorkers", Connection: sq}}, "distributor", inputQueue, 1)
 	cancelChan := make(chan os.Signal, 1)
 	defer wqe.Close()
 	defer inputQueue.Close()
 	defer wq.Close()
 	defer tq.Close()
 	defer sq.Close()
+	used := false
 	// catch SIGETRM or SIGINTERRUPT
 	signal.Notify(cancelChan, syscall.SIGTERM, syscall.SIGINT)
 	go func() {
@@ -83,6 +84,7 @@ func main() {
 					continue
 				}
 
+				used = true
 				me.AnswerEofOk(data.IdempotencyKey, nil)
 				continue
 			}
@@ -102,6 +104,9 @@ func main() {
 					EOF:  false,
 				})
 				continue
+			}
+			if used && pFile == "stations" {
+				log.Infof("message sent late %v", data)
 			}
 			SendMessagesToQueue(data.Data, queue, data.City)
 		}

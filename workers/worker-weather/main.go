@@ -69,9 +69,12 @@ func main() {
 	id := os.Getenv("id")
 	inputQueue, _ := common.InitializeRabbitQueue[WorkerWeather, WorkerWeather]("weatherWorkers", "rabbit", id, 0)
 	outputQueueWeather, _ := common.InitializeRabbitQueue[JoinerData, JoinerData]("weatherQueue", "rabbit", "", 0)
-	v := make([]string, 1)
-	v = append(v, "weatherQueueEOF")
-	iqEOF, _ := common.CreateConsumerEOF(v, "weatherWorkersEOF", inputQueue, 3)
+	v := make([]common.NextToNotify, 1)
+	v = append(v, common.NextToNotify{
+		Name:       "weatherQueue",
+		Connection: outputQueueWeather,
+	})
+	iqEOF, _ := common.CreateConsumerEOF(v, "weatherWorkers", inputQueue, 3)
 	defer iqEOF.Close()
 	defer inputQueue.Close()
 	defer outputQueueWeather.Close()

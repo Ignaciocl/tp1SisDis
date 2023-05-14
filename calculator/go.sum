@@ -4,6 +4,12 @@ github.com/Ignaciocl/tp1SisdisCommons v0.3.14 h1:8rKokP2d6CSWRj4rFMtmWFE72KXl79G
 github.com/Ignaciocl/tp1SisdisCommons v0.3.14/go.mod h1:CXI2LfiMoCFYA8LgpX2rWEJx+7xY9bWyH2cXVLONplE=
 github.com/Ignaciocl/tp1SisdisCommons v0.3.16 h1:MMqBhubJPuUsy0CZjt3s4z/l8PCymvO/T8cyblo4Q9U=
 github.com/Ignaciocl/tp1SisdisCommons v0.3.16/go.mod h1:CXI2LfiMoCFYA8LgpX2rWEJx+7xY9bWyH2cXVLONplE=
+github.com/Ignaciocl/tp1SisdisCommons v0.4.1 h1:R3EVyFiVEkafTG6bi8UMmsfZmtFSq6rxSlJmIXozrug=
+github.com/Ignaciocl/tp1SisdisCommons v0.4.1/go.mod h1:CXI2LfiMoCFYA8LgpX2rWEJx+7xY9bWyH2cXVLONplE=
+github.com/Ignaciocl/tp1SisdisCommons v0.4.2 h1:5Ot8EPuzL+rbacONMUfI7Tgq5hMYvhL9jsFJ62xVCN8=
+github.com/Ignaciocl/tp1SisdisCommons v0.4.2/go.mod h1:CXI2LfiMoCFYA8LgpX2rWEJx+7xY9bWyH2cXVLONplE=
+github.com/Ignaciocl/tp1SisdisCommons v0.4.3 h1:KIaYIBzxF0ZvZeZOKc8+zfGCXUdnrlatpJ/JnQrJgOw=
+github.com/Ignaciocl/tp1SisdisCommons v0.4.3/go.mod h1:CXI2LfiMoCFYA8LgpX2rWEJx+7xY9bWyH2cXVLONplE=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/kr/pretty v0.1.0/go.mod h1:dAy3ld7l9f0ibDNOQOHHMYYIIbhfbHSm3C4ZsoJORNo=

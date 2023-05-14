@@ -2,7 +2,7 @@ import json
 import socket
 import time
 
-LINES_TO_SEND = 50
+LINES_TO_SEND = 35
 
 
 def formatSendMessage(data):
@@ -38,20 +38,23 @@ def sendCSVFile(nameFile, client):
             d = bytes(strToSend, 'utf-8')
             client.send(d)
             sent.append(strToSend)
-            # receiveData(client)
+            receiveData(client)
         data["data"], data["eof"] = [], True
         strToSend = formatSendMessage(data)
         client.send(bytes(strToSend, 'utf-8'))
         sent.append(strToSend)
-        # resServer = receiveData(client)
-        # print(json.loads(resServer))
+        resServer = receiveData(client)
+        print(json.loads(resServer))
 
 
 def receiveData(sock):
     bytesToRead = b''
     while len(bytesToRead) < 5:
         bytesToRead += sock.recv(5 - len(bytesToRead))
-    return sock.recv(int(bytesToRead))
+    responseServer = b''
+    while len(responseServer) < int(bytesToRead):
+        responseServer += sock.recv(int(bytesToRead) - len(responseServer))
+    return responseServer
 
 
 if __name__ == "__main__":

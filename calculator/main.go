@@ -80,7 +80,7 @@ func main() {
 	id := os.Getenv("id")
 	inputQueue, _ := common.InitializeRabbitQueue[JoinerInfo, JoinerInfo]("calculatorMontreal", "rabbit", id, 0)
 	aq, _ := common.InitializeRabbitQueue[AccumulatorInfo, AccumulatorInfo]("preAccumulatorMontreal", "rabbit", "", 0)
-	me, _ := common.CreateConsumerEOF([]string{"preAccumulatorMontreal"}, "calculatorMontrealEOF", inputQueue, 1)
+	me, _ := common.CreateConsumerEOF([]common.NextToNotify{{"preAccumulatorMontreal", aq}}, "calculatorMontreal", inputQueue, 1)
 	defer inputQueue.Close()
 	defer aq.Close()
 	oniChan := make(chan os.Signal, 1)

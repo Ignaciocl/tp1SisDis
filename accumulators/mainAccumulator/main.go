@@ -60,7 +60,7 @@ func (a actionable) DoActionIfEOF() {
 
 func main() {
 	inputQueue, _ := common.InitializeRabbitQueue[Accumulator, Accumulator]("accumulator", "rabbit", "", 0)
-	me, _ := common.CreateConsumerEOF(nil, "accumulatorEOF", inputQueue, 3)
+	me, _ := common.CreateConsumerEOF(nil, "accumulator", inputQueue, 3)
 	accumulatorInfo, _ := common.InitializeRabbitQueue[QueryResult, QueryResult]("accConnection", "rabbit", "", 0)
 	defer accumulatorInfo.Close()
 	defer inputQueue.Close()
