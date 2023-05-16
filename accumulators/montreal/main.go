@@ -106,7 +106,6 @@ func main() {
 				va = append(va, value)
 			}
 		}
-		log.Infof("data of values that passed is: %v", va)
 		_ = outputQueue.SendMessage(Accumulator{Stations: v, Key: "random"}) // do graceful shutdown
 		_ = outputQueue.SendMessage(Accumulator{EofData: d})
 	}()

@@ -133,7 +133,17 @@ services:
     - bikers
     volumes:
     - ./joiners/stations/main.go/:/app/main.go
-    - ./joiners/stations/Queue.go/:/app/Queue.go
+  accumulator-stations:
+    build:
+      context: ./accumulators/stationAvg
+    container_name: accumulatorStationAvg
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    networks:
+      - bikers
+    volumes:
+      - ./accumulators/stationAvg/main.go/:/app/main.go
   joiner-weather:
     build:
       context: ./joiners/weather

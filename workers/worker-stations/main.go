@@ -37,6 +37,7 @@ type JoinerDataStation struct {
 	Name string              `json:"name"`
 	Key  string              `json:"key"`
 	EOF  bool                `json:"EOF"`
+	City string              `json:"city"`
 }
 
 const MontrealStation = "montreal"
@@ -50,8 +51,9 @@ func processData(station WorkerStation, qm, qs common.Queue[JoinerDataStation, J
 			Latitude:  station.Data.Latitude,
 			Year:      station.Data.Year,
 		},
-		Key: station.Key,
-		EOF: station.EOF,
+		City: station.City,
+		Key:  station.Key,
+		EOF:  station.EOF,
 	}
 	if station.City == MontrealStation {
 		err := qm.SendMessage(js)
@@ -67,27 +69,6 @@ func processData(station WorkerStation, qm, qs common.Queue[JoinerDataStation, J
 			// ToDo implement shutDown manager
 		}
 	}
-}
-
-type checker struct {
-	data      map[string]string
-	blocker   chan struct{}
-	q         common.Queue[WorkerStation, WorkerStation]
-	filesUsed int
-}
-
-func (c checker) IsStillUsingNecessaryDataForFile(file string, city string) bool {
-	if city != "washington" {
-		<-c.blocker
-	} else {
-		for {
-			<-c.blocker
-			if c.q.IsEmpty() {
-				break
-			}
-		}
-	}
-	return true
 }
 
 func main() {

@@ -2,8 +2,8 @@ package main
 
 import (
 	common "github.com/Ignaciocl/tp1SisdisCommons"
+	log "github.com/sirupsen/logrus"
 	lasPistasDeBlue "github.com/umahmood/haversine"
-	"log"
 	"os"
 	"os/signal"
 	"strconv"
@@ -66,7 +66,7 @@ func getAccumulatorData(data []JoinerData) []AccumulatorData {
 	for _, d := range data {
 		distance, err := d.calcDistance()
 		if err != nil {
-			log.Printf("could not resolve distance cal for: %v. skipping", d)
+			log.Errorf("could not resolve distance cal for: %v. skipping", d)
 			continue
 		}
 		v = append(v, AccumulatorData{

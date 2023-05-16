@@ -86,7 +86,7 @@ func (c *Client) GetConnection(address string) {
 		os.Exit(1)
 	}
 	conn, _ := listen.Accept()
-	log.Println("connected")
+	log.Infof("connected")
 	c.conn = conn
 }
 func (c *Client) CloseConnection() {

@@ -1,9 +1,10 @@
 package main
 
 import (
+	"fmt"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
 	"github.com/pkg/errors"
-	"log"
+	log "github.com/sirupsen/logrus"
 	"os"
 	"os/signal"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 type ReceivableDataStation struct {
 	Code string `json:"code"`
 	Name string `json:"name"`
+	Year int    `json:"year"`
 }
 
 type ReceivableDataTrip struct {
@@ -25,63 +27,103 @@ type JoinerDataStation struct {
 	DataTrip    *[]ReceivableDataTrip  `json:"tripData,omitempty"`
 	Name        string                 `json:"name"`
 	Key         string                 `json:"key"`
+	City        string                 `json:"city"`
 	common.EofData
 }
 
-type AccumulatorData struct {
-	AvgStations []string `json:"avg_stations"`
-	Key         string   `json:"key"`
+type senderDataStation struct {
+	Name string `json:"name"`
+	Year int    `json:"year"`
+}
+
+type PreAccumulatorData struct {
+	Data []senderDataStation `json:"data"`
+	Key  string              `json:"key"`
 	common.EofData
 }
 
 type stationData struct {
-	sweetSixteen int
-	sadSeventeen int
-	name         string
+	name string
+}
+
+type stationAlive struct {
+	wasAliveOn17 bool
+	wasAliveOn16 bool
+}
+
+func (s *stationAlive) shouldBeConsidered() bool {
+	return s.wasAliveOn16 && s.wasAliveOn17
+}
+
+func (s *stationAlive) setAliveForYear(year int) {
+	if year == 2016 {
+		s.wasAliveOn16 = true
+	} else if year == 2017 {
+		s.wasAliveOn17 = true
+	}
 }
 
 type weird struct {
-	m map[string]stationData
+	m             map[string]stationData
+	stationToYear map[string]stationAlive
 }
 
-func (sd stationData) wasDouble() bool {
-	return sd.sadSeventeen > 2*sd.sweetSixteen
-}
-func getStationData(key string, accumulator map[string]stationData) (stationData, error) {
-	data, ok := accumulator[key]
+func getStationData(key string, city string, year int, accumulator map[string]stationData) (stationData, error) {
+	data, ok := accumulator[getStationKey(key, year, city)]
 	var err error
-	if !ok {
+	if !(ok) {
 		data = stationData{
-			sweetSixteen: 0,
-			sadSeventeen: 0,
-			name:         "",
+			name: "",
 		}
 		err = errors.New("data does not exist")
 	}
 	return data, err
 }
 
-func processData(data JoinerDataStation, w *weird) {
+func processData(data JoinerDataStation, w *weird, aq common.Queue[PreAccumulatorData, PreAccumulatorData]) {
 	accumulator := w.m
+	alive := w.stationToYear
+	city := data.City
 	if station := data.DataStation; station != nil {
-		sData, _ := getStationData(station.Code, accumulator)
+		sData, _ := getStationData(station.Code, city, station.Year, accumulator)
 		sData.name = station.Name
-		accumulator[station.Code] = sData
-	} else if trips := data.DataTrip; trips != nil {
-		for _, trip := range *trips {
-			dStation, err := getStationData(trip.Station, accumulator)
-			if err != nil {
-
-				return
+		accumulator[getStationKey(station.Code, station.Year, city)] = sData
+		var sa stationAlive
+		if d, ok := alive[station.Name]; ok {
+			sa = d
+		} else {
+			sa = stationAlive{
+				wasAliveOn17: false,
+				wasAliveOn16: false,
 			}
-			if trip.Year == 2016 {
-				dStation.sweetSixteen += 1
-			} else if trip.Year == 2017 {
-				dStation.sadSeventeen += 1
-			}
-			accumulator[trip.Station] = dStation
 		}
+		sa.setAliveForYear(station.Year)
+		alive[station.Name] = sa
+
+	} else if trips := data.DataTrip; trips != nil {
+		v := make([]senderDataStation, 0, len(*trips))
+		for _, trip := range *trips {
+			dStation, err := getStationData(trip.Station, data.City, trip.Year, accumulator)
+			if err != nil {
+				continue
+			}
+			if d, ok := alive[dStation.name]; !(ok && d.shouldBeConsidered()) {
+				continue
+			}
+			v = append(v, senderDataStation{
+				Name: dStation.name,
+				Year: trip.Year,
+			})
+		}
+		aq.SendMessage(PreAccumulatorData{
+			Data: v,
+			Key:  "random",
+		})
 	}
+}
+
+func getStationKey(stationCode string, year int, city string) string {
+	return fmt.Sprintf("%s-%s-%d", stationCode, city, year)
 }
 
 type actionable struct {
@@ -100,9 +142,9 @@ func main() {
 	common.FailOnError(err, "missing env value of worker trips")
 	inputQueue, _ := common.InitializeRabbitQueue[JoinerDataStation, JoinerDataStation]("stationsQueue", "rabbit", "", 0)
 	inputQueueTrip, _ := common.InitializeRabbitQueue[JoinerDataStation, JoinerDataStation]("stationsQueueTrip", "rabbit", "", 0)
-	aq, _ := common.InitializeRabbitQueue[AccumulatorData, AccumulatorData]("accumulator", "rabbit", "", 0)
+	aq, _ := common.InitializeRabbitQueue[PreAccumulatorData, PreAccumulatorData]("preAccumulatorSt", "rabbit", "", 0)
 	sfe, _ := common.CreateConsumerEOF(nil, "stationsQueue", inputQueue, workerStation)
-	tfe, _ := common.CreateConsumerEOF(nil, "stationsQueueTrip", inputQueueTrip, workerTrips)
+	tfe, _ := common.CreateConsumerEOF([]common.NextToNotify{{"preAccumulatorSt", aq}}, "stationsQueueTrip", inputQueueTrip, workerTrips)
 	defer sfe.Close()
 	defer tfe.Close()
 	defer inputQueue.Close()
@@ -110,12 +152,12 @@ func main() {
 	oniChan := make(chan os.Signal, 1)
 	// catch SIGETRM or SIGINTERRUPT
 	signal.Notify(oniChan, syscall.SIGTERM, syscall.SIGINT)
-	ns := make(chan struct{}, 1)
 	tt := make(chan struct{}, 1)
 	st := make(chan struct{}, 1)
 	st <- struct{}{}
 	acc := map[string]stationData{}
-	w := weird{m: acc}
+	aliveStations := map[string]stationAlive{}
+	w := weird{m: acc, stationToYear: aliveStations}
 	go func() {
 		for {
 			data, err := inputQueue.ReceiveMessage()
@@ -132,7 +174,7 @@ func main() {
 				common.FailOnError(err, "Failed while receiving message")
 				continue
 			}
-			processData(data, &w)
+			processData(data, &w, aq)
 			st <- p
 		}
 	}()
@@ -143,7 +185,7 @@ func main() {
 				log.Printf("joiner station trip eof received")
 				tfe.AnswerEofOk(data.IdempotencyKey, actionable{
 					c:  tt,
-					nc: ns,
+					nc: st,
 				})
 				continue
 			}
@@ -152,45 +194,10 @@ func main() {
 				common.FailOnError(err, "Failed while receiving message")
 				continue
 			}
-			processData(data, &w)
+			processData(data, &w, aq)
 			tt <- p
 		}
 	}()
-	go func() {
-		savedData := make(map[string]struct{}, 0)
-		for i := 0; i < 3; i += 1 {
-			<-ns
-			acc = w.m
-			for _, value := range acc {
-				if value.wasDouble() && value.name != "" {
-					savedData[value.name] = struct{}{}
-
-				}
-			}
-
-			if i != 2 {
-				st <- struct{}{}
-			}
-		}
-		v := make([]string, 0, len(savedData))
-		for key, _ := range savedData {
-			v = append(v, key)
-		}
-		l := AccumulatorData{
-			AvgStations: v,
-			Key:         "random",
-		}
-
-		_ = aq.SendMessage(l)
-		eof := AccumulatorData{EofData: common.EofData{
-			EOF:            true,
-			IdempotencyKey: "random",
-		},
-		}
-		aq.SendMessage(eof)
-		st <- struct{}{}
-	}()
-
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
 	<-oniChan
 }

@@ -102,6 +102,7 @@ func processData(
 		Key:  trip.Key,
 		EOF:  trip.EOF,
 		Data: vy,
+		City: trip.City,
 	})
 	if err != nil {
 		common.FailOnError(err, "Couldn't send message to joiner stations, failing horribly")
