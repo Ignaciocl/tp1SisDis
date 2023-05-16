@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -47,7 +48,7 @@ type JoinerData struct {
 func processData(
 	weather WorkerWeather,
 	qt common.Queue[JoinerData, JoinerData]) {
-	if weather.Data.Prec < 60 {
+	if weather.Data.Prec < 30 {
 		return
 	}
 	d := JoinerData{
@@ -67,6 +68,8 @@ func processData(
 
 func main() {
 	id := os.Getenv("id")
+	distributors, err := strconv.Atoi(os.Getenv("distributors"))
+	common.FailOnError(err, "missing env value of distributors")
 	inputQueue, _ := common.InitializeRabbitQueue[WorkerWeather, WorkerWeather]("weatherWorkers", "rabbit", id, 0)
 	outputQueueWeather, _ := common.InitializeRabbitQueue[JoinerData, JoinerData]("weatherQueue", "rabbit", "", 0)
 	v := make([]common.NextToNotify, 1)
@@ -74,7 +77,7 @@ func main() {
 		Name:       "weatherQueue",
 		Connection: outputQueueWeather,
 	})
-	iqEOF, _ := common.CreateConsumerEOF(v, "weatherWorkers", inputQueue, 3)
+	iqEOF, _ := common.CreateConsumerEOF(v, "weatherWorkers", inputQueue, distributors)
 	defer iqEOF.Close()
 	defer inputQueue.Close()
 	defer outputQueueWeather.Close()

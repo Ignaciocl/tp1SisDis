@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 )
 
@@ -93,12 +94,15 @@ func (a actionable) DoActionIfEOF() {
 }
 
 func main() {
-
+	workerStation, err := strconv.Atoi(os.Getenv("amountStationsWorkers"))
+	common.FailOnError(err, "missing env value of worker stations")
+	workerTrips, err := strconv.Atoi(os.Getenv("amountTripsWorkers"))
+	common.FailOnError(err, "missing env value of worker trips")
 	inputQueue, _ := common.InitializeRabbitQueue[JoinerDataStation, JoinerDataStation]("stationsQueue", "rabbit", "", 0)
 	inputQueueTrip, _ := common.InitializeRabbitQueue[JoinerDataStation, JoinerDataStation]("stationsQueueTrip", "rabbit", "", 0)
 	aq, _ := common.InitializeRabbitQueue[AccumulatorData, AccumulatorData]("accumulator", "rabbit", "", 0)
-	sfe, _ := common.CreateConsumerEOF(nil, "stationsQueue", inputQueue, 3)
-	tfe, _ := common.CreateConsumerEOF(nil, "stationsQueueTrip", inputQueueTrip, 3)
+	sfe, _ := common.CreateConsumerEOF(nil, "stationsQueue", inputQueue, workerStation)
+	tfe, _ := common.CreateConsumerEOF(nil, "stationsQueueTrip", inputQueueTrip, workerTrips)
 	defer sfe.Close()
 	defer tfe.Close()
 	defer inputQueue.Close()

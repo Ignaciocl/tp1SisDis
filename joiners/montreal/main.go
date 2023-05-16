@@ -1,10 +1,12 @@
 package main
 
 import (
+	"fmt"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
 	log "github.com/sirupsen/logrus"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 )
 
@@ -13,11 +15,13 @@ type SendableDataStation struct {
 	Name      string `json:"name"`
 	Latitude  string `json:"latitude"`
 	Longitude string `json:"longitude"`
+	Year      int    `json:"year"`
 }
 
 type SendableDataTrip struct {
 	OStation string `json:"o_station"`
 	EStation string `json:"e_station"`
+	Year     int    `json:"year"`
 }
 type JoinerDataStation struct {
 	DataStation *SendableDataStation `json:"stationData,omitempty"`
@@ -48,7 +52,7 @@ type AccumulatorInfo struct {
 
 func processData(station JoinerDataStation, accumulator map[string]sData, aq common.Queue[AccumulatorInfo, AccumulatorInfo]) {
 	if s := station.DataStation; s != nil {
-		accumulator[station.DataStation.Code] = sData{Long: station.DataStation.Longitude, Lat: station.DataStation.Latitude, Name: station.DataStation.Name}
+		accumulator[getStationKey(station.DataStation.Code, s.Year)] = sData{Long: station.DataStation.Longitude, Lat: station.DataStation.Latitude, Name: station.DataStation.Name}
 	} else if trip := station.DataTrip; trip != nil {
 		t := *trip
 		vToSend := make([]AccumulatorData, 0, len(t))
@@ -63,10 +67,14 @@ func processData(station JoinerDataStation, accumulator map[string]sData, aq com
 	}
 }
 
+func getStationKey(stationCode string, year int) string {
+	return fmt.Sprintf("%s-%d", stationCode, year)
+}
+
 func obtainInfoToSend(accumulator map[string]sData, trip SendableDataTrip) (AccumulatorData, bool) {
 	var ad AccumulatorData
-	dOStation, ok := accumulator[trip.OStation]
-	dEStation, oke := accumulator[trip.EStation]
+	dOStation, ok := accumulator[getStationKey(trip.OStation, trip.Year)]
+	dEStation, oke := accumulator[getStationKey(trip.EStation, trip.Year)]
 	if !(ok && oke) {
 		return ad, false
 	}
@@ -90,11 +98,17 @@ func (a actionable) DoActionIfEOF() {
 }
 
 func main() {
+	amountCalc, err := strconv.Atoi(os.Getenv("calculators"))
+	common.FailOnError(err, "missing env value of calculator")
+	workerStation, err := strconv.Atoi(os.Getenv("amountStationsWorkers"))
+	common.FailOnError(err, "missing env value of worker stations")
+	workerTrips, err := strconv.Atoi(os.Getenv("amountTripsWorkers"))
+	common.FailOnError(err, "missing env value of worker trips")
 	inputQueue, _ := common.InitializeRabbitQueue[JoinerDataStation, JoinerDataStation]("montrealQueue", "rabbit", "", 0)
 	inputQueueTrip, _ := common.InitializeRabbitQueue[JoinerDataStation, JoinerDataStation]("montrealQueueTrip", "rabbit", "", 0)
-	aq, _ := common.InitializeRabbitQueue[AccumulatorInfo, AccumulatorInfo]("calculatorMontreal", "rabbit", "", 3)
-	sfe, _ := common.CreateConsumerEOF(nil, "montrealQueue", inputQueue, 3)
-	tfe, _ := common.CreateConsumerEOF([]common.NextToNotify{{Name: "calculatorMontreal", Connection: aq}}, "montrealQueueTrip", inputQueueTrip, 3)
+	aq, _ := common.InitializeRabbitQueue[AccumulatorInfo, AccumulatorInfo]("calculatorMontreal", "rabbit", "", amountCalc)
+	sfe, _ := common.CreateConsumerEOF(nil, "montrealQueue", inputQueue, workerStation)
+	tfe, _ := common.CreateConsumerEOF([]common.NextToNotify{{Name: "calculatorMontreal", Connection: aq}}, "montrealQueueTrip", inputQueueTrip, workerTrips)
 	defer inputQueue.Close()
 	defer aq.Close()
 	defer inputQueueTrip.Close()
@@ -105,11 +119,11 @@ func main() {
 	// catch SIGETRM or SIGINTERRUPT
 	signal.Notify(oniChan, syscall.SIGTERM, syscall.SIGINT)
 	acc := make(map[string]sData)
+	finished := false
 	go func() {
 		for {
 			data, err := inputQueue.ReceiveMessage()
 			if data.EOF {
-				log.Infof("data received is: %v", data)
 				sfe.AnswerEofOk(data.IdempotencyKey, actionable{
 					c:  st,
 					nc: tt,
@@ -120,6 +134,9 @@ func main() {
 			if err != nil {
 				common.FailOnError(err, "Failed while receiving message")
 				continue
+			}
+			if finished {
+				log.Infof("message after eof %v", data)
 			}
 			processData(data, acc, aq)
 			st <- d

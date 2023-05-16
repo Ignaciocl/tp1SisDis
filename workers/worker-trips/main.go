@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 )
@@ -31,6 +32,7 @@ type WorkerTrip struct {
 type SendableDataMontreal struct {
 	OStation string `json:"o_station"`
 	EStation string `json:"e_station"`
+	Year     int    `json:"year"`
 }
 
 type SendableDataAvg struct {
@@ -67,6 +69,7 @@ func processData(
 			vm = append(vm, SendableDataMontreal{
 				OStation: v.OStation,
 				EStation: v.EStation,
+				Year:     v.Year,
 			})
 		}
 		if v.Year == 2016 || v.Year == 2017 {
@@ -74,6 +77,9 @@ func processData(
 				Station: v.OStation,
 				Year:    v.Year,
 			})
+		}
+		if v.Duration <= 0 {
+			v.Duration = 0
 		}
 		va = append(va, SendableDataWeather{
 			Duration: int32(v.Duration),
@@ -116,6 +122,8 @@ func processData(
 func main() {
 
 	id := os.Getenv("id")
+	distributors, err := strconv.Atoi(os.Getenv("distributors"))
+	common.FailOnError(err, "missing env value of distributors")
 	inputQueue, _ := common.InitializeRabbitQueue[WorkerTrip, WorkerTrip]("tripWorkers", "rabbit", id, 0)
 	outputQueueMontreal, _ := common.InitializeRabbitQueue[JoinerData[SendableDataMontreal], JoinerData[SendableDataMontreal]]("montrealQueueTrip", "rabbit", "", 0)
 	outputQueueStations, _ := common.InitializeRabbitQueue[JoinerData[SendableDataAvg], JoinerData[SendableDataAvg]]("stationsQueueTrip", "rabbit", "", 0)
@@ -131,7 +139,7 @@ func main() {
 		Name:       "weatherQueueTrip",
 		Connection: outputQueueWeather,
 	})
-	iqEOF, _ := common.CreateConsumerEOF(v, "tripWorkers", inputQueue, 3)
+	iqEOF, _ := common.CreateConsumerEOF(v, "tripWorkers", inputQueue, distributors)
 	defer iqEOF.Close()
 	defer inputQueue.Close()
 	defer outputQueueMontreal.Close()

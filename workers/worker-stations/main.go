@@ -5,6 +5,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 )
 
@@ -28,6 +29,7 @@ type SendableDataStation struct {
 	Name      string `json:"name"`
 	Latitude  string `json:"latitude"`
 	Longitude string `json:"longitude"`
+	Year      int    `json:"year"`
 }
 
 type JoinerDataStation struct {
@@ -46,6 +48,7 @@ func processData(station WorkerStation, qm, qs common.Queue[JoinerDataStation, J
 			Name:      station.Data.Name,
 			Longitude: station.Data.Longitude,
 			Latitude:  station.Data.Latitude,
+			Year:      station.Data.Year,
 		},
 		Key: station.Key,
 		EOF: station.EOF,
@@ -89,6 +92,8 @@ func (c checker) IsStillUsingNecessaryDataForFile(file string, city string) bool
 
 func main() {
 	id := os.Getenv("id")
+	distributors, err := strconv.Atoi(os.Getenv("distributors"))
+	common.FailOnError(err, "missing env value of distributors")
 	inputQueue, _ := common.InitializeRabbitQueue[WorkerStation, WorkerStation]("stationWorkers", "rabbit", id, 0)
 	outputQueueMontreal, _ := common.InitializeRabbitQueue[JoinerDataStation, JoinerDataStation]("montrealQueue", "rabbit", "", 0)
 	outputQueueStations, _ := common.InitializeRabbitQueue[JoinerDataStation, JoinerDataStation]("stationsQueue", "rabbit", "", 0)
@@ -100,7 +105,7 @@ func main() {
 		Name:       "stationsQueue",
 		Connection: outputQueueStations,
 	})
-	iqEOF, err := common.CreateConsumerEOF(v, "stationWorkers", inputQueue, 3)
+	iqEOF, err := common.CreateConsumerEOF(v, "stationWorkers", inputQueue, distributors)
 	common.FailOnError(err, "could not use consumer")
 	defer iqEOF.Close()
 	defer inputQueue.Close()
@@ -108,7 +113,6 @@ func main() {
 	defer outputQueueStations.Close()
 
 	oniChan := make(chan os.Signal, 1)
-	eofReceived := 0
 	// catch SIGETRM or SIGINTERRUPT
 	signal.Notify(oniChan, syscall.SIGTERM, syscall.SIGINT)
 	go func() {
@@ -119,13 +123,9 @@ func main() {
 				continue
 			}
 			if data.EOF {
-				eofReceived += 1
 				log.Infof("eof received to be triggered: %v", data)
 				iqEOF.AnswerEofOk(data.IdempotencyKey, nil)
 				continue
-			}
-			if eofReceived >= 3 {
-				log.Infof("MESSAGE BEING RECEIVED AFTER: %v", data)
 			}
 			processData(data, outputQueueMontreal, outputQueueStations)
 		}

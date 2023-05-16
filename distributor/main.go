@@ -59,7 +59,6 @@ func main() {
 	defer wq.Close()
 	defer tq.Close()
 	defer sq.Close()
-	used := false
 	// catch SIGETRM or SIGINTERRUPT
 	signal.Notify(cancelChan, syscall.SIGTERM, syscall.SIGINT)
 	go func() {
@@ -84,7 +83,7 @@ func main() {
 					continue
 				}
 
-				used = true
+				log.Infof("eof received and distributed for %v", data)
 				me.AnswerEofOk(data.IdempotencyKey, nil)
 				continue
 			}
@@ -104,9 +103,6 @@ func main() {
 					EOF:  false,
 				})
 				continue
-			}
-			if used && pFile == "stations" {
-				log.Infof("message sent late %v", data)
 			}
 			SendMessagesToQueue(data.Data, queue, data.City)
 		}

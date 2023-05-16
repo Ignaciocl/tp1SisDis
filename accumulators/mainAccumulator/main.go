@@ -2,7 +2,7 @@ package main
 
 import (
 	common "github.com/Ignaciocl/tp1SisdisCommons"
-	"log"
+	log "github.com/sirupsen/logrus"
 	"os"
 	"os/signal"
 	"syscall"
@@ -27,14 +27,17 @@ func processData(data Accumulator, acc map[string]QueryResponse) {
 		d := getQueryResponse(data.Key, acc)
 		d.Montreal = data.Stations
 		acc["random"] = d
+		log.Infof("received response query from montreal (query3): %v", d)
 	} else if data.AvgStations != nil {
 		d := getQueryResponse(data.Key, acc)
 		d.Avg = data.AvgStations
 		acc["random"] = d
+		log.Infof("received response query from stations (query2): %v", d)
 	} else if data.Duration != nil {
 		d := getQueryResponse(data.Key, acc)
 		d.AvgMore30 = data.Duration
 		acc["random"] = d
+		log.Infof("received response query from weather (query1): %v", d)
 	}
 }
 

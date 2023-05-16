@@ -5,6 +5,7 @@ import (
 	"fmt"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -125,6 +126,8 @@ func (dq dataQuery) writeQueryValue(data map[string]interface{}) {
 }
 
 func main() {
+	distributors, err := strconv.Atoi(os.Getenv("distributors"))
+	common.FailOnError(err, "missing env value of distributors")
 	v, err := InitConfig()
 	if err != nil {
 		log.Fatalf("%s", err)
@@ -155,7 +158,7 @@ func main() {
 	client := NewClient(clientConfig)
 	clientAcc := NewClient(clientConfigAcc)
 
-	queue, _ := common.InitializeRabbitQueue[dataToSend, dataToSend]("distributor", "rabbit", "", 3)
+	queue, _ := common.InitializeRabbitQueue[dataToSend, dataToSend]("distributor", "rabbit", "", distributors)
 	eofStarter, _ := common.CreatePublisher("rabbit", queue)
 	accumulatorInfo, _ := common.InitializeRabbitQueue[AccData, AccData]("accConnection", "rabbit", "", 0)
 	cancelChan := make(chan os.Signal, 1)
@@ -212,6 +215,7 @@ func main() {
 					EOF:            true,
 					IdempotencyKey: fmt.Sprintf("%s-%s", city, data.File),
 				})
+				log.Infof("eof received from client, to propagate: %v", string(d))
 				eofStarter.Publish("distributor", d, "eof", "topic")
 				client.AnswerClient([]byte("{\"finish\": true}"))
 				eofAmount += 1

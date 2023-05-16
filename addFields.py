@@ -10,6 +10,11 @@ def isInField(s):
             return True
     return False
 
+def setEnvVar(s: dict, name: str, amount: int):
+    env = s.get('environment', [])
+    env.append(f'{name}={amount}')
+    s['environment'] = env
+
 
 def addClients(services: dict, stations, trips, weather, distributors, calculators):
     keys = services.keys()
@@ -25,7 +30,7 @@ def addClients(services: dict, stations, trips, weather, distributors, calculato
             'container_name': f'worker-station{clientId}',
             'build': {'context': './workers/worker-stations'},
             'environment':
-                [f'id={clientId}'],
+                [f'id={clientId}', f'distributors={distributors}'],
             'networks': ['bikers'],
             'depends_on': {'rabbit': {'condition': 'service_healthy'}},
             'volumes': ['./workers/worker-stations/main.go/:/app/main.go']
@@ -36,7 +41,7 @@ def addClients(services: dict, stations, trips, weather, distributors, calculato
             'container_name': f'worker-trip{clientId}',
             'build': {'context': './workers/worker-trips'},
             'environment':
-                [f'id={clientId}'],
+                [f'id={clientId}', f'distributors={distributors}'],
             'networks': ['bikers'],
             'depends_on': {'rabbit': {'condition': 'service_healthy'}},
             'volumes': ['./workers/worker-trips/main.go/:/app/main.go']
@@ -47,7 +52,7 @@ def addClients(services: dict, stations, trips, weather, distributors, calculato
             'container_name': f'worker-weather{clientId}',
             'build': {'context': './workers/worker-weather'},
             'environment':
-                [f'id={clientId}'],
+                [f'id={clientId}', f'distributors={distributors}'],
             'networks': ['bikers'],
             'depends_on': {'rabbit': {'condition': 'service_healthy'}},
             'volumes': ['./workers/worker-weather/main.go/:/app/main.go']
@@ -74,6 +79,15 @@ def addClients(services: dict, stations, trips, weather, distributors, calculato
             'depends_on': {'rabbit': {'condition': 'service_healthy'}},
             'volumes': ['./calculator/main.go/:/app/main.go']
         }
+    setEnvVar(services['accumulator-montreal'], 'calculators', calculators)
+    setEnvVar(services['joiner-montreal'], 'calculators', calculators)
+    setEnvVar(services['joiner-montreal'], 'amountStationsWorkers', stations)
+    setEnvVar(services['joiner-montreal'], 'amountTripsWorkers', trips)
+    setEnvVar(services['joiner-stations'], 'amountStationsWorkers', stations)
+    setEnvVar(services['joiner-stations'], 'amountTripsWorkers', trips)
+    setEnvVar(services['joiner-weather'], 'amountWeatherWorkers', weather)
+    setEnvVar(services['joiner-weather'], 'amountTripsWorkers', trips)
+    setEnvVar(services['server'], 'distributors', distributors)
 
 
 def isValidParam(p):

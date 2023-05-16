@@ -20,6 +20,8 @@ services:
     depends_on:
       rabbit:
         condition: service_healthy
+    environment:
+    - calculators=3
     networks:
     - bikers
     volumes:
@@ -109,6 +111,10 @@ services:
     depends_on:
       rabbit:
         condition: service_healthy
+    environment:
+    - calculators=3
+    - amountStationsWorkers=3
+    - amountTripsWorkers=3
     networks:
     - bikers
     volumes:
@@ -120,6 +126,9 @@ services:
     depends_on:
       rabbit:
         condition: service_healthy
+    environment:
+    - amountStationsWorkers=3
+    - amountTripsWorkers=3
     networks:
     - bikers
     volumes:
@@ -132,6 +141,9 @@ services:
     depends_on:
       rabbit:
         condition: service_healthy
+    environment:
+    - amountWeatherWorkers=3
+    - amountTripsWorkers=3
     networks:
     - bikers
     volumes:
@@ -156,6 +168,8 @@ services:
     depends_on:
       rabbit:
         condition: service_healthy
+    environment:
+    - distributors=3
     networks:
     - bikers
     ports:
@@ -173,6 +187,7 @@ services:
         condition: service_healthy
     environment:
     - id=1
+    - distributors=3
     networks:
     - bikers
     volumes:
@@ -186,6 +201,7 @@ services:
         condition: service_healthy
     environment:
     - id=2
+    - distributors=3
     networks:
     - bikers
     volumes:
@@ -199,6 +215,7 @@ services:
         condition: service_healthy
     environment:
     - id=3
+    - distributors=3
     networks:
     - bikers
     volumes:
@@ -212,6 +229,7 @@ services:
         condition: service_healthy
     environment:
     - id=1
+    - distributors=3
     networks:
     - bikers
     volumes:
@@ -225,6 +243,7 @@ services:
         condition: service_healthy
     environment:
     - id=2
+    - distributors=3
     networks:
     - bikers
     volumes:
@@ -238,6 +257,7 @@ services:
         condition: service_healthy
     environment:
     - id=3
+    - distributors=3
     networks:
     - bikers
     volumes:
@@ -251,6 +271,7 @@ services:
         condition: service_healthy
     environment:
     - id=1
+    - distributors=3
     networks:
     - bikers
     volumes:
@@ -264,6 +285,7 @@ services:
         condition: service_healthy
     environment:
     - id=2
+    - distributors=3
     networks:
     - bikers
     volumes:
@@ -277,6 +299,7 @@ services:
         condition: service_healthy
     environment:
     - id=3
+    - distributors=3
     networks:
     - bikers
     volumes:
