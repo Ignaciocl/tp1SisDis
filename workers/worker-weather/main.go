@@ -4,10 +4,8 @@ import (
 	common "github.com/Ignaciocl/tp1SisdisCommons"
 	"log"
 	"os"
-	"os/signal"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -62,7 +60,6 @@ func processData(
 	err := qt.SendMessage(d)
 	if err != nil {
 		common.FailOnError(err, "Couldn't send message to joiner stations, failing horribly")
-		// ToDo implement shutDown manager
 	}
 }
 
@@ -78,13 +75,13 @@ func main() {
 		Connection: outputQueueWeather,
 	})
 	iqEOF, _ := common.CreateConsumerEOF(v, "weatherWorkers", inputQueue, distributors)
+	grace, _ := common.CreateGracefulManager("rabbit")
+	defer grace.Close()
+	defer common.RecoverFromPanic(grace, "")
 	defer iqEOF.Close()
 	defer inputQueue.Close()
 	defer outputQueueWeather.Close()
 
-	cancelChan := make(chan os.Signal, 1)
-	// catch SIGETRM or SIGINTERRUPT
-	signal.Notify(cancelChan, syscall.SIGTERM, syscall.SIGINT)
 	go func() {
 		for {
 			data, err := inputQueue.ReceiveMessage()
@@ -101,6 +98,5 @@ func main() {
 	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
-	<-cancelChan
-	log.Printf("Closing for sigterm received")
+	common.WaitForSigterm(grace)
 }

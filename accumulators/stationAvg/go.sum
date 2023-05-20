@@ -1,5 +1,15 @@
 github.com/Ignaciocl/tp1SisdisCommons v0.4.3 h1:KIaYIBzxF0ZvZeZOKc8+zfGCXUdnrlatpJ/JnQrJgOw=
 github.com/Ignaciocl/tp1SisdisCommons v0.4.3/go.mod h1:CXI2LfiMoCFYA8LgpX2rWEJx+7xY9bWyH2cXVLONplE=
+github.com/Ignaciocl/tp1SisdisCommons v0.4.4 h1:dtr7XEdL7pam9w8mUUuc/EgCsjI4G1HWBk1rMdySizQ=
+github.com/Ignaciocl/tp1SisdisCommons v0.4.4/go.mod h1:CXI2LfiMoCFYA8LgpX2rWEJx+7xY9bWyH2cXVLONplE=
+github.com/Ignaciocl/tp1SisdisCommons v0.4.5 h1:OX+bPeKS+KP0ZPe0GTqMZb+T57MCaxcWu8jqTlBETi0=
+github.com/Ignaciocl/tp1SisdisCommons v0.4.5/go.mod h1:CXI2LfiMoCFYA8LgpX2rWEJx+7xY9bWyH2cXVLONplE=
+github.com/Ignaciocl/tp1SisdisCommons v0.4.6 h1:95xUk9QGydKg/H1tAoaNzVFyG2DYRe66h6EGZJ0Av4g=
+github.com/Ignaciocl/tp1SisdisCommons v0.4.6/go.mod h1:CXI2LfiMoCFYA8LgpX2rWEJx+7xY9bWyH2cXVLONplE=
+github.com/Ignaciocl/tp1SisdisCommons v0.4.7 h1:Spe3+cn90PSSJoA0nF3187xCrovgpQk998JUS4Exe84=
+github.com/Ignaciocl/tp1SisdisCommons v0.4.7/go.mod h1:CXI2LfiMoCFYA8LgpX2rWEJx+7xY9bWyH2cXVLONplE=
+github.com/Ignaciocl/tp1SisdisCommons v0.4.8 h1:E2D0dh0C3vxOvSjC1eu7/uU5vJQZvMebA5BZSGYu6iQ=
+github.com/Ignaciocl/tp1SisdisCommons v0.4.8/go.mod h1:CXI2LfiMoCFYA8LgpX2rWEJx+7xY9bWyH2cXVLONplE=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/kr/pretty v0.1.0/go.mod h1:dAy3ld7l9f0ibDNOQOHHMYYIIbhfbHSm3C4ZsoJORNo=
@@ -10,8 +20,12 @@ github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINE
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/rabbitmq/amqp091-go v1.8.0 h1:GBFy5PpLQ5jSVVSYv8ecHGqeX7UTLYR4ItQbDCss9MM=
 github.com/rabbitmq/amqp091-go v1.8.0/go.mod h1:+jPrT9iY2eLjRaMSRHUhc3z14E/l85kv/f+6luSD3pc=
+github.com/rabbitmq/amqp091-go v1.8.1 h1:RejT1SBUim5doqcL6s7iN6SBmsQqyTgXb1xMlH0h1hA=
+github.com/rabbitmq/amqp091-go v1.8.1/go.mod h1:+jPrT9iY2eLjRaMSRHUhc3z14E/l85kv/f+6luSD3pc=
 github.com/sirupsen/logrus v1.9.0 h1:trlNQbNUG3OdDrDil03MCb1H2o9nJ1x4/5LYw7byDE0=
 github.com/sirupsen/logrus v1.9.0/go.mod h1:naHLuLoDiP4jHNo9R0sCBMtWGeIprob74mVsIT4qYEQ=
+github.com/sirupsen/logrus v1.9.2 h1:oxx1eChJGI6Uks2ZC4W1zpLlVgqB8ner4EuQwV4Ik1Y=
+github.com/sirupsen/logrus v1.9.2/go.mod h1:naHLuLoDiP4jHNo9R0sCBMtWGeIprob74mVsIT4qYEQ=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/objx v0.4.0/go.mod h1:YvHI0jy2hoMjB+UWwv71VJQ9isScKT/TqJzVSSt89Yw=
 github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
@@ -20,6 +34,8 @@ github.com/stretchr/testify v1.8.0/go.mod h1:yNjHg4UonilssWZ8iaSj1OCr/vHnekPRkoO
 go.uber.org/goleak v1.2.1/go.mod h1:qlT2yGI9QafXHhZZLxlSuNsMw3FFLxBr+tBRlmO1xH4=
 golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8 h1:0A+M6Uqn+Eje4kHMK80dtF3JCXC4ykBgQG4Fe06QRhQ=
 golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+golang.org/x/sys v0.8.0 h1:EBmGv8NaZBZTWvrbjNoL6HVt+IVy3QDQpJs7VRIw3tU=
+golang.org/x/sys v0.8.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=

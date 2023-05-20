@@ -24,8 +24,17 @@ services:
     - calculators=3
     networks:
     - bikers
+  accumulator-stations:
+    build:
+      context: ./accumulators/stationAvg
+    container_name: accumulatorStationAvg
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    networks:
+    - bikers
     volumes:
-    - ./accumulators/montreal/main.go/:/app/main.go
+    - ./accumulators/stationAvg/main.go/:/app/main.go
   calculator1:
     build:
       context: ./calculator
@@ -37,8 +46,6 @@ services:
     - id=1
     networks:
     - bikers
-    volumes:
-    - ./calculator/main.go/:/app/main.go
   calculator2:
     build:
       context: ./calculator
@@ -50,8 +57,6 @@ services:
     - id=2
     networks:
     - bikers
-    volumes:
-    - ./calculator/main.go/:/app/main.go
   calculator3:
     build:
       context: ./calculator
@@ -63,8 +68,6 @@ services:
     - id=3
     networks:
     - bikers
-    volumes:
-    - ./calculator/main.go/:/app/main.go
   distributor1:
     build:
       context: ./distributor
@@ -76,8 +79,6 @@ services:
     - id=1
     networks:
     - bikers
-    volumes:
-    - ./distributor/main.go/:/app/main.go
   distributor2:
     build:
       context: ./distributor
@@ -89,8 +90,6 @@ services:
     - id=2
     networks:
     - bikers
-    volumes:
-    - ./distributor/main.go/:/app/main.go
   distributor3:
     build:
       context: ./distributor
@@ -102,8 +101,6 @@ services:
     - id=3
     networks:
     - bikers
-    volumes:
-    - ./distributor/main.go/:/app/main.go
   joiner-montreal:
     build:
       context: ./joiners/montreal
@@ -117,8 +114,6 @@ services:
     - amountTripsWorkers=3
     networks:
     - bikers
-    volumes:
-    - ./joiners/montreal/main.go/:/app/main.go
   joiner-stations:
     build:
       context: ./joiners/stations
@@ -131,19 +126,6 @@ services:
     - amountTripsWorkers=3
     networks:
     - bikers
-    volumes:
-    - ./joiners/stations/main.go/:/app/main.go
-  accumulator-stations:
-    build:
-      context: ./accumulators/stationAvg
-    container_name: accumulatorStationAvg
-    depends_on:
-      rabbit:
-        condition: service_healthy
-    networks:
-      - bikers
-    volumes:
-      - ./accumulators/stationAvg/main.go/:/app/main.go
   joiner-weather:
     build:
       context: ./joiners/weather
@@ -156,8 +138,6 @@ services:
     - amountTripsWorkers=3
     networks:
     - bikers
-    volumes:
-    - ./joiners/weather/main.go/:/app/main.go
   rabbit:
     container_name: rabbitContainer
     healthcheck:
@@ -185,9 +165,6 @@ services:
     ports:
     - 3034:9000
     - 3334:3334
-    volumes:
-    - ./server/main.go/:/app/main.go
-    - ./server/client.go/:/app/client.go
   worker-station1:
     build:
       context: ./workers/worker-stations
@@ -200,8 +177,6 @@ services:
     - distributors=3
     networks:
     - bikers
-    volumes:
-    - ./workers/worker-stations/main.go/:/app/main.go
   worker-station2:
     build:
       context: ./workers/worker-stations
@@ -214,8 +189,6 @@ services:
     - distributors=3
     networks:
     - bikers
-    volumes:
-    - ./workers/worker-stations/main.go/:/app/main.go
   worker-station3:
     build:
       context: ./workers/worker-stations
@@ -228,8 +201,6 @@ services:
     - distributors=3
     networks:
     - bikers
-    volumes:
-    - ./workers/worker-stations/main.go/:/app/main.go
   worker-trip1:
     build:
       context: ./workers/worker-trips
@@ -242,8 +213,6 @@ services:
     - distributors=3
     networks:
     - bikers
-    volumes:
-    - ./workers/worker-trips/main.go/:/app/main.go
   worker-trip2:
     build:
       context: ./workers/worker-trips
@@ -256,8 +225,6 @@ services:
     - distributors=3
     networks:
     - bikers
-    volumes:
-    - ./workers/worker-trips/main.go/:/app/main.go
   worker-trip3:
     build:
       context: ./workers/worker-trips
@@ -270,8 +237,6 @@ services:
     - distributors=3
     networks:
     - bikers
-    volumes:
-    - ./workers/worker-trips/main.go/:/app/main.go
   worker-weather1:
     build:
       context: ./workers/worker-weather
@@ -284,8 +249,6 @@ services:
     - distributors=3
     networks:
     - bikers
-    volumes:
-    - ./workers/worker-weather/main.go/:/app/main.go
   worker-weather2:
     build:
       context: ./workers/worker-weather
@@ -298,8 +261,6 @@ services:
     - distributors=3
     networks:
     - bikers
-    volumes:
-    - ./workers/worker-weather/main.go/:/app/main.go
   worker-weather3:
     build:
       context: ./workers/worker-weather
@@ -312,5 +273,3 @@ services:
     - distributors=3
     networks:
     - bikers
-    volumes:
-    - ./workers/worker-weather/main.go/:/app/main.go

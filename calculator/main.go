@@ -5,9 +5,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	lasPistasDeBlue "github.com/umahmood/haversine"
 	"os"
-	"os/signal"
 	"strconv"
-	"syscall"
 )
 
 type JoinerData struct {
@@ -81,11 +79,11 @@ func main() {
 	inputQueue, _ := common.InitializeRabbitQueue[JoinerInfo, JoinerInfo]("calculatorMontreal", "rabbit", id, 0)
 	aq, _ := common.InitializeRabbitQueue[AccumulatorInfo, AccumulatorInfo]("preAccumulatorMontreal", "rabbit", "", 0)
 	me, _ := common.CreateConsumerEOF([]common.NextToNotify{{"preAccumulatorMontreal", aq}}, "calculatorMontreal", inputQueue, 1)
+	grace, _ := common.CreateGracefulManager("rabbit")
+	defer grace.Close()
+	defer common.RecoverFromPanic(grace, "")
 	defer inputQueue.Close()
 	defer aq.Close()
-	oniChan := make(chan os.Signal, 1)
-	// catch SIGETRM or SIGINTERRUPT
-	signal.Notify(oniChan, syscall.SIGTERM, syscall.SIGINT)
 	go func() {
 		for {
 			data, err := inputQueue.ReceiveMessage()
@@ -98,5 +96,5 @@ func main() {
 			aq.SendMessage(AccumulatorInfo{Data: ad})
 		}
 	}()
-	<-oniChan
+	common.WaitForSigterm(grace)
 }

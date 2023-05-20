@@ -4,15 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
-	"os"
-	"strconv"
-	"strings"
-	"time"
-
-	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
+	"os"
+	"strconv"
+	"strings"
 )
 
 // InitConfig Function that uses viper library to parse configuration parameters.
@@ -32,11 +29,8 @@ func InitConfig() (*viper.Viper, error) {
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
 	// Add env variables supported
-	v.BindEnv("id")
+	v.BindEnv("server", "addressPolling")
 	v.BindEnv("server", "address")
-	v.BindEnv("loop", "period")
-	v.BindEnv("loop", "lapse")
-	v.BindEnv("log", "level")
 
 	// Try to read configuration from config file. If config file
 	// does not exists then ReadInConfig will fail but configuration
@@ -45,15 +39,6 @@ func InitConfig() (*viper.Viper, error) {
 	v.SetConfigFile("./config.yaml")
 	if err := v.ReadInConfig(); err != nil {
 		fmt.Printf("Configuration could not be read from config file. Using env variables instead")
-	}
-
-	// Parse time.Duration variables and return an error if those variables cannot be parsed
-	if _, err := time.ParseDuration(v.GetString("loop.lapse")); err != nil {
-		return nil, errors.Wrapf(err, "Could not parse CLI_LOOP_LAPSE env var as time.Duration.")
-	}
-
-	if _, err := time.ParseDuration(v.GetString("loop.period")); err != nil {
-		return nil, errors.Wrapf(err, "Could not parse CLI_LOOP_PERIOD env var as time.Duration.")
 	}
 
 	return v, nil
@@ -75,18 +60,6 @@ func InitLogger(logLevel string) error {
 	logrus.SetFormatter(customFormatter)
 	logrus.SetLevel(level)
 	return nil
-}
-
-// PrintConfig Print all the configuration parameters of the program.
-// For debugging purposes only
-func PrintConfig(v *viper.Viper) {
-	logrus.Infof("action: config | result: success | client_id: %s | server_address: %s | loop_lapse: %v | loop_period: %v | log_level: %s",
-		v.GetString("id"),
-		v.GetString("server.address"),
-		v.GetDuration("loop.lapse"),
-		v.GetDuration("loop.period"),
-		v.GetString("log.level"),
-	)
 }
 
 type fileData struct {
@@ -137,23 +110,11 @@ func main() {
 		log.Fatalf("%s", err)
 	}
 
-	// Print program config with debugging purposes
-	PrintConfig(v)
 	clientConfig := ClientConfig{
-		ServerAddress:  v.GetString("server.address"),
-		ID:             v.GetString("id"),
-		LoopLapse:      v.GetDuration("loop.lapse"),
-		LoopPeriod:     v.GetDuration("loop.period"),
-		ClosingMessage: v.GetString("closingMessage"),
-		ClosingBatch:   v.GetString("closingBatch"),
+		ServerAddress: v.GetString("server.address"),
 	}
 	clientConfigAcc := ClientConfig{
-		ID:             v.GetString("id"),
-		LoopLapse:      v.GetDuration("loop.lapse"),
-		LoopPeriod:     v.GetDuration("loop.period"),
-		ClosingMessage: v.GetString("closingMessage"),
-		ClosingBatch:   v.GetString("closingBatch"),
-		ServerAddress:  "3334",
+		ServerAddress: v.GetString("server.addressPolling"),
 	}
 	client := NewClient(clientConfig)
 	clientAcc := NewClient(clientConfigAcc)
@@ -161,7 +122,9 @@ func main() {
 	queue, _ := common.InitializeRabbitQueue[dataToSend, dataToSend]("distributor", "rabbit", "", distributors)
 	eofStarter, _ := common.CreatePublisher("rabbit", queue)
 	accumulatorInfo, _ := common.InitializeRabbitQueue[AccData, AccData]("accConnection", "rabbit", "", 0)
-	cancelChan := make(chan os.Signal, 1)
+	grace, _ := common.CreateGracefulManager("rabbit")
+	defer grace.Close()
+	defer common.RecoverFromPanic(grace, "")
 
 	defer queue.Close()
 	defer client.CloseConnection()
@@ -179,70 +142,73 @@ func main() {
 		log.Infof("data received from acc is: %v", result)
 		dq.writeQueryValue(result.QueryResult)
 	}()
-	go func() {
-		log.Info("waiting for polling")
-		clientAcc.GetConnection(":3334")
-		log.Info("received connection")
-		for {
-			log.Infof("waiting for polling of client")
-			clientAcc.ReceiveData()
-			log.Infof("polling of client receive correctly")
-			if data, ok := dq.getQueryValue("random"); !ok {
-				clientAcc.AnswerClient([]byte("{}"))
-			} else {
-				p, _ := json.Marshal(data)
-				clientAcc.AnswerClient(p)
+	go receivePolling(clientAcc, dq)
+	go receiveData(client, eofStarter, queue)
+	common.WaitForSigterm(grace)
+}
+
+func receiveData(client *Client, eofStarter common.Publisher, queue common.Queue[dataToSend, dataToSend]) {
+	client.GetConnection()
+	eofAmount := 0
+	city := "montreal"
+	for {
+		bodyBytes, _ := client.ReceiveData()
+		var data fileData
+		if len(bodyBytes) < 3 {
+			continue
+		}
+		if err := json.Unmarshal(bodyBytes, &data); err != nil {
+			common.FailOnError(err, fmt.Sprintf("error while receiving data for file: %v", string(bodyBytes)))
+			continue
+		}
+		if data.EOF != nil && *data.EOF {
+			d, _ := json.Marshal(common.EofData{
+				EOF:            true,
+				IdempotencyKey: fmt.Sprintf("%s-%s", city, data.File),
+			})
+			log.Infof("eof received from client, to propagate: %v", string(d))
+			eofStarter.Publish("distributor", d, "eof", "topic")
+			client.AnswerClient([]byte("{\"finish\": true}"))
+			eofAmount += 1
+			if eofAmount == 3 {
+				city = "toronto"
+			} else if eofAmount == 6 {
+				city = "washington"
+			}
+			if eofAmount == 9 {
 				break
 			}
+			continue
 		}
-	}()
-	go func() {
-		client.GetConnection(":9000")
-		eofAmount := 0
-		city := "montreal"
-		for {
-			bodyBytes, _ := client.ReceiveData()
-			var data fileData
-			if len(bodyBytes) < 3 {
-				continue
-			}
-			if err := json.Unmarshal(bodyBytes, &data); err != nil {
-				common.FailOnError(err, fmt.Sprintf("error while receiving data for file: %v", string(bodyBytes)))
-				continue
-			}
-			if data.EOF != nil && *data.EOF {
-				d, _ := json.Marshal(common.EofData{
-					EOF:            true,
-					IdempotencyKey: fmt.Sprintf("%s-%s", city, data.File),
-				})
-				log.Infof("eof received from client, to propagate: %v", string(d))
-				eofStarter.Publish("distributor", d, "eof", "topic")
-				client.AnswerClient([]byte("{\"finish\": true}"))
-				eofAmount += 1
-				if eofAmount == 3 {
-					city = "toronto"
-				} else if eofAmount == 6 {
-					city = "washington"
-				}
-				if eofAmount == 9 {
-					break
-				}
-				// Trigger eof globally
-				continue
-			}
 
-			err := queue.SendMessage(dataToSend{
-				File: data.File,
-				Data: data.Data,
-				City: city,
-			})
-			if err != nil {
-				log.Errorf("error happened: %v", err)
-			}
-			client.AnswerClient([]byte("{\"continue\": true}"))
+		err := queue.SendMessage(dataToSend{
+			File: data.File,
+			Data: data.Data,
+			City: city,
+		})
+		if err != nil {
+			log.Errorf("error happened: %v", err)
 		}
-		client.CloseConnection()
-		log.Info("connection closed")
-	}()
-	<-cancelChan
+		client.AnswerClient([]byte("{\"continue\": true}"))
+	}
+	client.CloseConnection()
+	log.Info("connection closed")
+}
+
+func receivePolling(clientAcc *Client, dq dataQuery) {
+	log.Info("waiting for polling")
+	clientAcc.GetConnection()
+	log.Info("received connection")
+	for {
+		log.Infof("waiting for polling of client")
+		clientAcc.ReceiveData()
+		log.Infof("polling of client receive correctly")
+		if data, ok := dq.getQueryValue("random"); !ok {
+			clientAcc.AnswerClient([]byte("{}"))
+		} else {
+			p, _ := json.Marshal(data)
+			clientAcc.AnswerClient(p)
+			break
+		}
+	}
 }

@@ -4,9 +4,7 @@ import (
 	common "github.com/Ignaciocl/tp1SisdisCommons"
 	log "github.com/sirupsen/logrus"
 	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 )
 
 type receivedData struct {
@@ -53,14 +51,15 @@ func main() {
 	wqe, _ := common.CreateConsumerEOF([]common.NextToNotify{{Name: "weatherWorkers", Connection: wq}}, "distributor", inputQueue, 1)
 	tqe, _ := common.CreateConsumerEOF([]common.NextToNotify{{Name: "tripWorkers", Connection: tq}}, "distributor", inputQueue, 1)
 	sqe, _ := common.CreateConsumerEOF([]common.NextToNotify{{Name: "stationWorkers", Connection: sq}}, "distributor", inputQueue, 1)
-	cancelChan := make(chan os.Signal, 1)
+	grace, _ := common.CreateGracefulManager("rabbit")
+	defer grace.Close()
+	defer common.RecoverFromPanic(grace, "")
 	defer wqe.Close()
 	defer inputQueue.Close()
 	defer wq.Close()
 	defer tq.Close()
 	defer sq.Close()
 	// catch SIGETRM or SIGINTERRUPT
-	signal.Notify(cancelChan, syscall.SIGTERM, syscall.SIGINT)
 	go func() {
 		pFile := ""
 		var queue common.Queue[SendableData, SendableData]
@@ -107,6 +106,5 @@ func main() {
 			SendMessagesToQueue(data.Data, queue, data.City)
 		}
 	}()
-	<-cancelChan
-	log.Printf("Closing for sigterm received")
+	common.WaitForSigterm(grace)
 }

@@ -4,9 +4,7 @@ import (
 	common "github.com/Ignaciocl/tp1SisdisCommons"
 	log "github.com/sirupsen/logrus"
 	"os"
-	"os/signal"
 	"strconv"
-	"syscall"
 )
 
 type dStation struct {
@@ -66,13 +64,13 @@ func main() {
 	inputQueue, _ := common.InitializeRabbitQueue[AccumulatorInfo, AccumulatorInfo]("preAccumulatorMontreal", "rabbit", "", 0)
 	outputQueue, _ := common.InitializeRabbitQueue[Accumulator, Accumulator]("accumulator", "rabbit", "", 0)
 	me, _ := common.CreateConsumerEOF(nil, "preAccumulatorMontreal", inputQueue, amountCalc)
+	grace, _ := common.CreateGracefulManager("rabbit")
+	defer grace.Close()
+	defer common.RecoverFromPanic(grace, "")
 	defer me.Close()
 	defer inputQueue.Close()
 	defer outputQueue.Close()
-	oniChan := make(chan os.Signal, 1)
 	eof := make(chan common.EofData, 1)
-	// catch SIGETRM or SIGINTERRUPT
-	signal.Notify(oniChan, syscall.SIGTERM, syscall.SIGINT)
 	acc := make(map[string]dStation)
 	go func() {
 		for {
@@ -111,5 +109,5 @@ func main() {
 	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
-	<-oniChan
+	common.WaitForSigterm(grace)
 }

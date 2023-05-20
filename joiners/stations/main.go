@@ -6,9 +6,7 @@ import (
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"os"
-	"os/signal"
 	"strconv"
-	"syscall"
 )
 
 type ReceivableDataStation struct {
@@ -63,7 +61,7 @@ func (s *stationAlive) setAliveForYear(year int) {
 	}
 }
 
-type weird struct {
+type mapHolder struct {
 	m             map[string]stationData
 	stationToYear map[string]stationAlive
 }
@@ -80,7 +78,7 @@ func getStationData(key string, city string, year int, accumulator map[string]st
 	return data, err
 }
 
-func processData(data JoinerDataStation, w *weird, aq common.Queue[PreAccumulatorData, PreAccumulatorData]) {
+func processData(data JoinerDataStation, w *mapHolder, aq common.Queue[PreAccumulatorData, PreAccumulatorData]) {
 	accumulator := w.m
 	alive := w.stationToYear
 	city := data.City
@@ -145,19 +143,19 @@ func main() {
 	aq, _ := common.InitializeRabbitQueue[PreAccumulatorData, PreAccumulatorData]("preAccumulatorSt", "rabbit", "", 0)
 	sfe, _ := common.CreateConsumerEOF(nil, "stationsQueue", inputQueue, workerStation)
 	tfe, _ := common.CreateConsumerEOF([]common.NextToNotify{{"preAccumulatorSt", aq}}, "stationsQueueTrip", inputQueueTrip, workerTrips)
+	grace, _ := common.CreateGracefulManager("rabbit")
+	defer grace.Close()
+	defer common.RecoverFromPanic(grace, "")
 	defer sfe.Close()
 	defer tfe.Close()
 	defer inputQueue.Close()
 	defer aq.Close()
-	oniChan := make(chan os.Signal, 1)
-	// catch SIGETRM or SIGINTERRUPT
-	signal.Notify(oniChan, syscall.SIGTERM, syscall.SIGINT)
 	tt := make(chan struct{}, 1)
 	st := make(chan struct{}, 1)
 	st <- struct{}{}
 	acc := map[string]stationData{}
 	aliveStations := map[string]stationAlive{}
-	w := weird{m: acc, stationToYear: aliveStations}
+	w := mapHolder{m: acc, stationToYear: aliveStations}
 	go func() {
 		for {
 			data, err := inputQueue.ReceiveMessage()
@@ -199,5 +197,5 @@ func main() {
 		}
 	}()
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
-	<-oniChan
+	common.WaitForSigterm(grace)
 }

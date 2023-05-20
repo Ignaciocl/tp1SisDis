@@ -4,9 +4,7 @@ import (
 	common "github.com/Ignaciocl/tp1SisdisCommons"
 	"log"
 	"os"
-	"os/signal"
 	"strconv"
-	"syscall"
 )
 
 type ReceivableDataWeather struct {
@@ -88,20 +86,19 @@ func main() {
 	aq, _ := common.InitializeRabbitQueue[AccumulatorData, AccumulatorData]("accumulator", "rabbit", "", 0)
 	wqEOF, _ := common.CreateConsumerEOF(nil, "weatherQueue", inputQueue, workerWeather)
 	tqEOF, _ := common.CreateConsumerEOF(nil, "weatherQueueTrip", inputTrips, workerTrips)
-	oniChan := make(chan os.Signal, 1)
+	grace, _ := common.CreateGracefulManager("rabbit")
+	defer grace.Close()
+	defer common.RecoverFromPanic(grace, "")
 	defer wqEOF.Close()
 	defer tqEOF.Close()
 	defer inputQueue.Close()
 	defer aq.Close()
 	defer inputTrips.Close()
-	// catch SIGETRM or SIGINTERRUPT
-	signal.Notify(oniChan, syscall.SIGTERM, syscall.SIGINT)
 	tripTurn := make(chan struct{}, 1)
 	weatherTurn := make(chan struct{}, 1)
 	ns := make(chan struct{}, 1)
 	weatherTurn <- struct{}{}
 	acc := make(map[string]weatherDuration)
-	o := 0
 	go func() {
 		for {
 			data, err := inputQueue.ReceiveMessage()
@@ -118,7 +115,6 @@ func main() {
 				continue
 			}
 			processData(data, acc)
-			o += 1
 			weatherTurn <- s
 		}
 	}() // For weather
@@ -139,10 +135,9 @@ func main() {
 				continue
 			}
 			processData(data, acc)
-			o += 1
 			tripTurn <- s
 		}
-	}() // For weather
+	}() // For trip
 
 	go func() {
 		d := preAccumulatorData{
@@ -178,7 +173,6 @@ func main() {
 				Key: "random",
 			}
 		}
-		log.Printf("amount got and duration: %d, %d amount of messages received %d", d.Amount, d.DurGathered, o)
 		_ = aq.SendMessage(l)
 		eof := AccumulatorData{EofData: common.EofData{
 			EOF:            true,
@@ -190,5 +184,5 @@ func main() {
 	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
-	<-oniChan
+	common.WaitForSigterm(grace)
 }

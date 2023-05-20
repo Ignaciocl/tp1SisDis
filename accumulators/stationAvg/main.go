@@ -2,10 +2,6 @@ package main
 
 import (
 	common "github.com/Ignaciocl/tp1SisdisCommons"
-	log "github.com/sirupsen/logrus"
-	"os"
-	"os/signal"
-	"syscall"
 )
 
 type ReceivableDataStation struct {
@@ -75,12 +71,12 @@ func main() {
 	inputQueue, _ := common.InitializeRabbitQueue[JoinerDataStation, JoinerDataStation]("preAccumulatorSt", "rabbit", "", 0)
 	aq, _ := common.InitializeRabbitQueue[AccumulatorData, AccumulatorData]("accumulator", "rabbit", "", 0)
 	sfe, _ := common.CreateConsumerEOF(nil, "preAccumulatorSt", inputQueue, 1)
+	grace, _ := common.CreateGracefulManager("rabbit")
+	defer grace.Close()
+	defer common.RecoverFromPanic(grace, "")
 	defer sfe.Close()
 	defer inputQueue.Close()
 	defer aq.Close()
-	oniChan := make(chan os.Signal, 1)
-	// catch SIGETRM or SIGINTERRUPT
-	signal.Notify(oniChan, syscall.SIGTERM, syscall.SIGINT)
 	ns := make(chan struct{}, 1)
 	st := make(chan struct{}, 1)
 	st <- struct{}{}
@@ -138,6 +134,5 @@ func main() {
 		st <- struct{}{}
 	}()
 
-	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
-	<-oniChan
+	common.WaitForSigterm(grace)
 }

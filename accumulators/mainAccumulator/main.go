@@ -3,9 +3,6 @@ package main
 import (
 	common "github.com/Ignaciocl/tp1SisdisCommons"
 	log "github.com/sirupsen/logrus"
-	"os"
-	"os/signal"
-	"syscall"
 )
 
 type Accumulator struct {
@@ -65,12 +62,12 @@ func main() {
 	inputQueue, _ := common.InitializeRabbitQueue[Accumulator, Accumulator]("accumulator", "rabbit", "", 0)
 	me, _ := common.CreateConsumerEOF(nil, "accumulator", inputQueue, 3)
 	accumulatorInfo, _ := common.InitializeRabbitQueue[QueryResult, QueryResult]("accConnection", "rabbit", "", 0)
+	grace, _ := common.CreateGracefulManager("rabbit")
+	defer grace.Close()
+	defer common.RecoverFromPanic(grace, "")
 	defer accumulatorInfo.Close()
 	defer inputQueue.Close()
 	ns := make(chan struct{}, 1)
-	oniChan := make(chan os.Signal, 1)
-	// catch SIGETRM or SIGINTERRUPT
-	signal.Notify(oniChan, syscall.SIGTERM, syscall.SIGINT)
 	acc := make(map[string]QueryResponse)
 	go func() {
 		for {
@@ -95,5 +92,5 @@ func main() {
 	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
-	<-oniChan
+	common.WaitForSigterm(grace)
 }

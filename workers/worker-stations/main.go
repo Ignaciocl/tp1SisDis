@@ -4,9 +4,7 @@ import (
 	common "github.com/Ignaciocl/tp1SisdisCommons"
 	log "github.com/sirupsen/logrus"
 	"os"
-	"os/signal"
 	"strconv"
-	"syscall"
 )
 
 type Station struct {
@@ -59,14 +57,12 @@ func processData(station WorkerStation, qm, qs common.Queue[JoinerDataStation, J
 		err := qm.SendMessage(js)
 		if err != nil {
 			common.FailOnError(err, "Couldn't send message to joiner montreal, failing horribly")
-			// ToDo implement shutDown manager
 		}
 	}
 	if station.Data.Year == 2016 || station.Data.Year == 2017 {
 		err := qs.SendMessage(js)
 		if err != nil {
 			common.FailOnError(err, "Couldn't send message to joiner stations, failing horribly")
-			// ToDo implement shutDown manager
 		}
 	}
 }
@@ -88,14 +84,14 @@ func main() {
 	})
 	iqEOF, err := common.CreateConsumerEOF(v, "stationWorkers", inputQueue, distributors)
 	common.FailOnError(err, "could not use consumer")
+	grace, _ := common.CreateGracefulManager("rabbit")
+	defer grace.Close()
+	defer common.RecoverFromPanic(grace, "")
 	defer iqEOF.Close()
 	defer inputQueue.Close()
 	defer outputQueueMontreal.Close()
 	defer outputQueueStations.Close()
 
-	oniChan := make(chan os.Signal, 1)
-	// catch SIGETRM or SIGINTERRUPT
-	signal.Notify(oniChan, syscall.SIGTERM, syscall.SIGINT)
 	go func() {
 		for {
 			data, err := inputQueue.ReceiveMessage()
@@ -113,6 +109,5 @@ func main() {
 	}()
 
 	log.Info(" [*] Waiting for messages. To exit press CTRL+C")
-	<-oniChan
-	log.Print("Closing for sigterm received")
+	common.WaitForSigterm(grace)
 }

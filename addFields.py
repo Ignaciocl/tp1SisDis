@@ -10,8 +10,14 @@ def isInField(s):
             return True
     return False
 
+
 def setEnvVar(s: dict, name: str, amount: int):
     env = s.get('environment', [])
+    if s.get('volumes', False):
+        s.pop('volumes')
+    for k in env:
+        if k.startswith(name):
+            env.remove(k)
     env.append(f'{name}={amount}')
     s['environment'] = env
 
@@ -33,7 +39,6 @@ def addClients(services: dict, stations, trips, weather, distributors, calculato
                 [f'id={clientId}', f'distributors={distributors}'],
             'networks': ['bikers'],
             'depends_on': {'rabbit': {'condition': 'service_healthy'}},
-            'volumes': ['./workers/worker-stations/main.go/:/app/main.go']
         }
     for i in range(trips):
         clientId = i + 1
@@ -44,7 +49,6 @@ def addClients(services: dict, stations, trips, weather, distributors, calculato
                 [f'id={clientId}', f'distributors={distributors}'],
             'networks': ['bikers'],
             'depends_on': {'rabbit': {'condition': 'service_healthy'}},
-            'volumes': ['./workers/worker-trips/main.go/:/app/main.go']
         }
     for i in range(weather):
         clientId = i + 1
@@ -55,7 +59,6 @@ def addClients(services: dict, stations, trips, weather, distributors, calculato
                 [f'id={clientId}', f'distributors={distributors}'],
             'networks': ['bikers'],
             'depends_on': {'rabbit': {'condition': 'service_healthy'}},
-            'volumes': ['./workers/worker-weather/main.go/:/app/main.go']
         }
     for i in range(distributors):
         clientId = i + 1
@@ -66,7 +69,6 @@ def addClients(services: dict, stations, trips, weather, distributors, calculato
                 [f'id={clientId}'],
             'networks': ['bikers'],
             'depends_on': {'rabbit': {'condition': 'service_healthy'}},
-            'volumes': ['./distributor/main.go/:/app/main.go']
         }
     for i in range(calculators):
         clientId = i + 1
@@ -77,7 +79,6 @@ def addClients(services: dict, stations, trips, weather, distributors, calculato
                 [f'id={clientId}'],
             'networks': ['bikers'],
             'depends_on': {'rabbit': {'condition': 'service_healthy'}},
-            'volumes': ['./calculator/main.go/:/app/main.go']
         }
     setEnvVar(services['accumulator-montreal'], 'calculators', calculators)
     setEnvVar(services['joiner-montreal'], 'calculators', calculators)

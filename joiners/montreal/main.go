@@ -5,9 +5,7 @@ import (
 	common "github.com/Ignaciocl/tp1SisdisCommons"
 	log "github.com/sirupsen/logrus"
 	"os"
-	"os/signal"
 	"strconv"
-	"syscall"
 )
 
 type SendableDataStation struct {
@@ -109,15 +107,16 @@ func main() {
 	aq, _ := common.InitializeRabbitQueue[AccumulatorInfo, AccumulatorInfo]("calculatorMontreal", "rabbit", "", amountCalc)
 	sfe, _ := common.CreateConsumerEOF(nil, "montrealQueue", inputQueue, workerStation)
 	tfe, _ := common.CreateConsumerEOF([]common.NextToNotify{{Name: "calculatorMontreal", Connection: aq}}, "montrealQueueTrip", inputQueueTrip, workerTrips)
+	grace, _ := common.CreateGracefulManager("rabbit")
+	defer grace.Close()
+	defer common.RecoverFromPanic(grace, "")
 	defer inputQueue.Close()
 	defer aq.Close()
 	defer inputQueueTrip.Close()
-	oniChan := make(chan os.Signal, 1)
 	tt := make(chan struct{}, 1)
 	st := make(chan struct{}, 1)
 	st <- struct{}{}
 	// catch SIGETRM or SIGINTERRUPT
-	signal.Notify(oniChan, syscall.SIGTERM, syscall.SIGINT)
 	acc := make(map[string]sData)
 	finished := false
 	go func() {
@@ -164,5 +163,5 @@ func main() {
 	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
-	<-oniChan
+	common.WaitForSigterm(grace)
 }

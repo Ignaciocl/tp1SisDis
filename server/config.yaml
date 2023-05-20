@@ -1,10 +1,6 @@
 # id: 1
 server:
-  address: "server:12345"
-loop:
-  lapse: "0m20s"
-  period: "5s"
+  address: ":9000"
+  addressPolling: ":3334"
 log:
   level: "info"
-closingMessage: "hello there"
-closingBatch: "general kenobi"
