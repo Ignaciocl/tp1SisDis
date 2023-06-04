@@ -2,6 +2,8 @@ package main
 
 import (
 	common "github.com/Ignaciocl/tp1SisdisCommons"
+	"github.com/Ignaciocl/tp1SisdisCommons/queue"
+	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	log "github.com/sirupsen/logrus"
 	"os"
 	"strconv"
@@ -40,7 +42,7 @@ type JoinerDataStation struct {
 
 const MontrealStation = "montreal"
 
-func processData(station WorkerStation, qm, qs common.Queue[JoinerDataStation, JoinerDataStation]) {
+func processData(station WorkerStation, qm, qs queue.Sender[JoinerDataStation]) {
 	js := JoinerDataStation{
 		Data: SendableDataStation{
 			Code:      station.Data.Code,
@@ -56,13 +58,13 @@ func processData(station WorkerStation, qm, qs common.Queue[JoinerDataStation, J
 	if station.City == MontrealStation {
 		err := qm.SendMessage(js)
 		if err != nil {
-			common.FailOnError(err, "Couldn't send message to joiner montreal, failing horribly")
+			utils.FailOnError(err, "Couldn't send message to joiner montreal, failing horribly")
 		}
 	}
 	if station.Data.Year == 2016 || station.Data.Year == 2017 {
 		err := qs.SendMessage(js)
 		if err != nil {
-			common.FailOnError(err, "Couldn't send message to joiner stations, failing horribly")
+			utils.FailOnError(err, "Couldn't send message to joiner stations, failing horribly")
 		}
 	}
 }
@@ -70,10 +72,10 @@ func processData(station WorkerStation, qm, qs common.Queue[JoinerDataStation, J
 func main() {
 	id := os.Getenv("id")
 	distributors, err := strconv.Atoi(os.Getenv("distributors"))
-	common.FailOnError(err, "missing env value of distributors")
-	inputQueue, _ := common.InitializeRabbitQueue[WorkerStation, WorkerStation]("stationWorkers", "rabbit", id, 0)
-	outputQueueMontreal, _ := common.InitializeRabbitQueue[JoinerDataStation, JoinerDataStation]("montrealQueue", "rabbit", "", 0)
-	outputQueueStations, _ := common.InitializeRabbitQueue[JoinerDataStation, JoinerDataStation]("stationsQueue", "rabbit", "", 0)
+	utils.FailOnError(err, "missing env value of distributors")
+	inputQueue, _ := queue.InitializeReceiver[WorkerStation]("stationWorkers", "rabbit", id, "", nil)
+	outputQueueMontreal, _ := queue.InitializeSender[JoinerDataStation]("montrealQueue", distributors, nil, "rabbit")
+	outputQueueStations, _ := queue.InitializeSender[JoinerDataStation]("stationsQueue", distributors, nil, "rabbit")
 	v := make([]common.NextToNotify, 2)
 	v = append(v, common.NextToNotify{
 		Name:       "montrealQueue",
@@ -83,10 +85,10 @@ func main() {
 		Connection: outputQueueStations,
 	})
 	iqEOF, err := common.CreateConsumerEOF(v, "stationWorkers", inputQueue, distributors)
-	common.FailOnError(err, "could not use consumer")
+	utils.FailOnError(err, "could not use consumer")
 	grace, _ := common.CreateGracefulManager("rabbit")
 	defer grace.Close()
-	defer common.RecoverFromPanic(grace, "")
+	defer utils.RecoverFromPanic(grace, "")
 	defer iqEOF.Close()
 	defer inputQueue.Close()
 	defer outputQueueMontreal.Close()
@@ -94,20 +96,22 @@ func main() {
 
 	go func() {
 		for {
-			data, err := inputQueue.ReceiveMessage()
+			data, msgId, err := inputQueue.ReceiveMessage()
 			if err != nil {
-				common.FailOnError(err, "Failed while receiving message")
+				utils.FailOnError(err, "Failed while receiving message")
 				continue
 			}
 			if data.EOF {
 				log.Infof("eof received to be triggered: %v", data)
 				iqEOF.AnswerEofOk(data.IdempotencyKey, nil)
+				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 				continue
 			}
 			processData(data, outputQueueMontreal, outputQueueStations)
+			utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 		}
 	}()
 
 	log.Info(" [*] Waiting for messages. To exit press CTRL+C")
-	common.WaitForSigterm(grace)
+	utils.WaitForSigterm(grace)
 }

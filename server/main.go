@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
+	"github.com/Ignaciocl/tp1SisdisCommons/queue"
+	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
@@ -100,7 +102,7 @@ func (dq dataQuery) writeQueryValue(data map[string]interface{}) {
 
 func main() {
 	distributors, err := strconv.Atoi(os.Getenv("distributors"))
-	common.FailOnError(err, "missing env value of distributors")
+	utils.FailOnError(err, "missing env value of distributors")
 	v, err := InitConfig()
 	if err != nil {
 		log.Fatalf("%s", err)
@@ -119,14 +121,14 @@ func main() {
 	client := NewClient(clientConfig)
 	clientAcc := NewClient(clientConfigAcc)
 
-	queue, _ := common.InitializeRabbitQueue[dataToSend, dataToSend]("distributor", "rabbit", "", distributors)
-	eofStarter, _ := common.CreatePublisher("rabbit", queue)
-	accumulatorInfo, _ := common.InitializeRabbitQueue[AccData, AccData]("accConnection", "rabbit", "", 0)
+	sender, _ := queue.InitializeSender[dataToSend]("distributor", distributors, nil, "rabbit")
+	eofStarter, _ := common.CreatePublisher("rabbit", sender)
+	accumulatorInfo, _ := queue.InitializeReceiver[AccData]("accConnection", "rabbit", "", "", sender)
 	grace, _ := common.CreateGracefulManager("rabbit")
 	defer grace.Close()
-	defer common.RecoverFromPanic(grace, "")
+	defer utils.RecoverFromPanic(grace, "")
 
-	defer queue.Close()
+	defer sender.Close()
 	defer client.CloseConnection()
 	defer accumulatorInfo.Close()
 	defer eofStarter.Close()
@@ -138,16 +140,17 @@ func main() {
 		data: make(map[string]map[string]interface{}, 0),
 	}
 	go func() {
-		result, _ := accumulatorInfo.ReceiveMessage()
+		result, id, _ := accumulatorInfo.ReceiveMessage()
 		log.Infof("data received from acc is: %v", result)
 		dq.writeQueryValue(result.QueryResult)
+		utils.LogError(accumulatorInfo.AckMessage(id), "could not ack message")
 	}()
 	go receivePolling(clientAcc, dq)
-	go receiveData(client, eofStarter, queue)
-	common.WaitForSigterm(grace)
+	go receiveData(client, eofStarter, sender)
+	utils.WaitForSigterm(grace)
 }
 
-func receiveData(client *Client, eofStarter common.Publisher, queue common.Queue[dataToSend, dataToSend]) {
+func receiveData(client *Client, eofStarter common.Publisher, queue queue.Sender[dataToSend]) {
 	client.GetConnection()
 	eofAmount := 0
 	city := "montreal"
@@ -158,7 +161,7 @@ func receiveData(client *Client, eofStarter common.Publisher, queue common.Queue
 			continue
 		}
 		if err := json.Unmarshal(bodyBytes, &data); err != nil {
-			common.FailOnError(err, fmt.Sprintf("error while receiving data for file: %v", string(bodyBytes)))
+			utils.FailOnError(err, fmt.Sprintf("error while receiving data for file: %v", string(bodyBytes)))
 			continue
 		}
 		if data.EOF != nil && *data.EOF {

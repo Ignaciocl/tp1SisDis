@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
+	"github.com/Ignaciocl/tp1SisdisCommons/queue"
+	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"os"
@@ -78,7 +80,7 @@ func getStationData(key string, city string, year int, accumulator map[string]st
 	return data, err
 }
 
-func processData(data JoinerDataStation, w *mapHolder, aq common.Queue[PreAccumulatorData, PreAccumulatorData]) {
+func processData(data JoinerDataStation, w *mapHolder, aq queue.Sender[PreAccumulatorData]) {
 	accumulator := w.m
 	alive := w.stationToYear
 	city := data.City
@@ -135,17 +137,17 @@ func (a actionable) DoActionIfEOF() {
 
 func main() {
 	workerStation, err := strconv.Atoi(os.Getenv("amountStationsWorkers"))
-	common.FailOnError(err, "missing env value of worker stations")
+	utils.FailOnError(err, "missing env value of worker stations")
 	workerTrips, err := strconv.Atoi(os.Getenv("amountTripsWorkers"))
-	common.FailOnError(err, "missing env value of worker trips")
-	inputQueue, _ := common.InitializeRabbitQueue[JoinerDataStation, JoinerDataStation]("stationsQueue", "rabbit", "", 0)
-	inputQueueTrip, _ := common.InitializeRabbitQueue[JoinerDataStation, JoinerDataStation]("stationsQueueTrip", "rabbit", "", 0)
-	aq, _ := common.InitializeRabbitQueue[PreAccumulatorData, PreAccumulatorData]("preAccumulatorSt", "rabbit", "", 0)
+	utils.FailOnError(err, "missing env value of worker trips")
+	inputQueue, _ := queue.InitializeReceiver[JoinerDataStation]("stationsQueue", "rabbit", "", "", nil)
+	inputQueueTrip, _ := queue.InitializeReceiver[JoinerDataStation]("stationsQueueTrip", "rabbit", "", "", nil)
+	aq, _ := queue.InitializeSender[PreAccumulatorData]("preAccumulatorSt", 0, nil, "rabbit")
 	sfe, _ := common.CreateConsumerEOF(nil, "stationsQueue", inputQueue, workerStation)
 	tfe, _ := common.CreateConsumerEOF([]common.NextToNotify{{"preAccumulatorSt", aq}}, "stationsQueueTrip", inputQueueTrip, workerTrips)
 	grace, _ := common.CreateGracefulManager("rabbit")
 	defer grace.Close()
-	defer common.RecoverFromPanic(grace, "")
+	defer utils.RecoverFromPanic(grace, "")
 	defer sfe.Close()
 	defer tfe.Close()
 	defer inputQueue.Close()
@@ -158,44 +160,48 @@ func main() {
 	w := mapHolder{m: acc, stationToYear: aliveStations}
 	go func() {
 		for {
-			data, err := inputQueue.ReceiveMessage()
+			data, msgId, err := inputQueue.ReceiveMessage()
 			if data.EOF {
 
 				sfe.AnswerEofOk(data.IdempotencyKey, actionable{
 					c:  st,
 					nc: tt,
 				})
+				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 				continue
 			}
 			p := <-st
 			if err != nil {
-				common.FailOnError(err, "Failed while receiving message")
+				utils.FailOnError(err, "Failed while receiving message")
 				continue
 			}
 			processData(data, &w, aq)
+			utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 			st <- p
 		}
 	}()
 	go func() {
 		for {
-			data, err := inputQueueTrip.ReceiveMessage()
+			data, msgId, err := inputQueueTrip.ReceiveMessage()
 			if data.EOF {
 				log.Printf("joiner station trip eof received")
 				tfe.AnswerEofOk(data.IdempotencyKey, actionable{
 					c:  tt,
 					nc: st,
 				})
+				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 				continue
 			}
 			p := <-tt
 			if err != nil {
-				common.FailOnError(err, "Failed while receiving message")
+				utils.FailOnError(err, "Failed while receiving message")
 				continue
 			}
 			processData(data, &w, aq)
+			utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 			tt <- p
 		}
 	}()
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
-	common.WaitForSigterm(grace)
+	utils.WaitForSigterm(grace)
 }

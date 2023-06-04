@@ -2,6 +2,8 @@ package main
 
 import (
 	common "github.com/Ignaciocl/tp1SisdisCommons"
+	"github.com/Ignaciocl/tp1SisdisCommons/queue"
+	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	log "github.com/sirupsen/logrus"
 	"os"
 	"strconv"
@@ -60,13 +62,13 @@ func (a actionable) DoActionIfEOF() {
 
 func main() {
 	amountCalc, err := strconv.Atoi(os.Getenv("calculators"))
-	common.FailOnError(err, "missing env value of calculator")
-	inputQueue, _ := common.InitializeRabbitQueue[AccumulatorInfo, AccumulatorInfo]("preAccumulatorMontreal", "rabbit", "", 0)
-	outputQueue, _ := common.InitializeRabbitQueue[Accumulator, Accumulator]("accumulator", "rabbit", "", 0)
+	utils.FailOnError(err, "missing env value of calculator")
+	inputQueue, _ := queue.InitializeReceiver[AccumulatorInfo]("preAccumulatorMontreal", "rabbit", "", "", nil)
+	outputQueue, _ := queue.InitializeSender[Accumulator]("accumulator", 0, nil, "rabbit")
 	me, _ := common.CreateConsumerEOF(nil, "preAccumulatorMontreal", inputQueue, amountCalc)
 	grace, _ := common.CreateGracefulManager("rabbit")
 	defer grace.Close()
-	defer common.RecoverFromPanic(grace, "")
+	defer utils.RecoverFromPanic(grace, "")
 	defer me.Close()
 	defer inputQueue.Close()
 	defer outputQueue.Close()
@@ -74,23 +76,24 @@ func main() {
 	acc := make(map[string]dStation)
 	go func() {
 		for {
-			dataInfo, err := inputQueue.ReceiveMessage()
+			dataInfo, msgId, err := inputQueue.ReceiveMessage()
 			if dataInfo.EOF {
-
 				me.AnswerEofOk(dataInfo.IdempotencyKey, actionable{
 					nc:   eof,
 					data: dataInfo.EofData,
 				})
+				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 				continue
 			}
 
 			if err != nil {
-				common.FailOnError(err, "Failed while receiving message")
+				utils.FailOnError(err, "Failed while receiving message")
 				continue
 			}
 			for _, d := range dataInfo.Data {
 				processData(d, acc)
 			}
+			utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 		}
 	}()
 	go func() {
@@ -109,5 +112,5 @@ func main() {
 	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
-	common.WaitForSigterm(grace)
+	utils.WaitForSigterm(grace)
 }

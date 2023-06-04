@@ -2,6 +2,8 @@ package main
 
 import (
 	common "github.com/Ignaciocl/tp1SisdisCommons"
+	"github.com/Ignaciocl/tp1SisdisCommons/queue"
+	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	log "github.com/sirupsen/logrus"
 	lasPistasDeBlue "github.com/umahmood/haversine"
 	"os"
@@ -76,25 +78,27 @@ func getAccumulatorData(data []JoinerData) []AccumulatorData {
 }
 func main() {
 	id := os.Getenv("id")
-	inputQueue, _ := common.InitializeRabbitQueue[JoinerInfo, JoinerInfo]("calculatorMontreal", "rabbit", id, 0)
-	aq, _ := common.InitializeRabbitQueue[AccumulatorInfo, AccumulatorInfo]("preAccumulatorMontreal", "rabbit", "", 0)
+	inputQueue, _ := queue.InitializeReceiver[JoinerInfo]("calculatorMontreal", "rabbit", id, "", nil)
+	aq, _ := queue.InitializeSender[AccumulatorInfo]("preAccumulatorMontreal", 0, nil, "rabbit")
 	me, _ := common.CreateConsumerEOF([]common.NextToNotify{{"preAccumulatorMontreal", aq}}, "calculatorMontreal", inputQueue, 1)
 	grace, _ := common.CreateGracefulManager("rabbit")
 	defer grace.Close()
-	defer common.RecoverFromPanic(grace, "")
+	defer utils.RecoverFromPanic(grace, "")
 	defer inputQueue.Close()
 	defer aq.Close()
 	go func() {
 		for {
-			data, err := inputQueue.ReceiveMessage()
-			common.FailOnError(err, "data is corrupted")
+			data, msgId, err := inputQueue.ReceiveMessage()
+			utils.FailOnError(err, "data is corrupted")
 			if data.EOF {
 				me.AnswerEofOk(data.IdempotencyKey, nil)
+				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 				continue
 			}
 			ad := getAccumulatorData(data.Data)
 			aq.SendMessage(AccumulatorInfo{Data: ad})
+			utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 		}
 	}()
-	common.WaitForSigterm(grace)
+	utils.WaitForSigterm(grace)
 }

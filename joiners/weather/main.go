@@ -2,6 +2,8 @@ package main
 
 import (
 	common "github.com/Ignaciocl/tp1SisdisCommons"
+	"github.com/Ignaciocl/tp1SisdisCommons/queue"
+	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	"log"
 	"os"
 	"strconv"
@@ -78,17 +80,18 @@ func (a actionable) DoActionIfEOF() {
 
 func main() {
 	workerWeather, err := strconv.Atoi(os.Getenv("amountWeatherWorkers"))
-	common.FailOnError(err, "missing env value of worker stations")
+	utils.FailOnError(err, "missing env value of worker stations")
 	workerTrips, err := strconv.Atoi(os.Getenv("amountTripsWorkers"))
-	common.FailOnError(err, "missing env value of worker trips")
-	inputQueue, _ := common.InitializeRabbitQueue[JoinerDataStation, JoinerDataStation]("weatherQueue", "rabbit", "", 0)
-	inputTrips, _ := common.InitializeRabbitQueue[JoinerDataStation, JoinerDataStation]("weatherQueueTrip", "rabbit", "", 0)
-	aq, _ := common.InitializeRabbitQueue[AccumulatorData, AccumulatorData]("accumulator", "rabbit", "", 0)
+	utils.FailOnError(err, "missing env value of worker trips")
+	connection, _ := queue.InitializeConnectionRabbit(nil, "rabbit")
+	inputQueue, _ := queue.InitializeReceiver[JoinerDataStation]("weatherQueue", "", "", "", connection)
+	inputTrips, _ := queue.InitializeReceiver[JoinerDataStation]("weatherQueueTrip", "", "", "", connection)
+	aq, _ := queue.InitializeSender[AccumulatorData]("accumulator", 0, connection, "")
 	wqEOF, _ := common.CreateConsumerEOF(nil, "weatherQueue", inputQueue, workerWeather)
 	tqEOF, _ := common.CreateConsumerEOF(nil, "weatherQueueTrip", inputTrips, workerTrips)
 	grace, _ := common.CreateGracefulManager("rabbit")
 	defer grace.Close()
-	defer common.RecoverFromPanic(grace, "")
+	defer utils.RecoverFromPanic(grace, "")
 	defer wqEOF.Close()
 	defer tqEOF.Close()
 	defer inputQueue.Close()
@@ -101,40 +104,44 @@ func main() {
 	acc := make(map[string]weatherDuration)
 	go func() {
 		for {
-			data, err := inputQueue.ReceiveMessage()
+			data, id, err := inputQueue.ReceiveMessage()
 			if data.EOF {
 				wqEOF.AnswerEofOk(data.IdempotencyKey, actionable{
 					c:  weatherTurn,
 					nc: tripTurn,
 				})
+				inputQueue.AckMessage(id)
 				continue
 			}
 			s := <-weatherTurn
 			if err != nil {
-				common.FailOnError(err, "Failed while receiving message")
+				utils.FailOnError(err, "Failed while receiving message")
 				continue
 			}
 			processData(data, acc)
+			inputQueue.AckMessage(id)
 			weatherTurn <- s
 		}
 	}() // For weather
 
 	go func() {
 		for {
-			data, err := inputTrips.ReceiveMessage()
+			data, id, err := inputTrips.ReceiveMessage()
 			if data.EOF {
 				tqEOF.AnswerEofOk(data.IdempotencyKey, actionable{
 					c:  tripTurn,
 					nc: ns,
 				})
+				inputTrips.AckMessage(id)
 				continue
 			}
 			s := <-tripTurn
 			if err != nil {
-				common.FailOnError(err, "Failed while receiving message")
+				utils.FailOnError(err, "Failed while receiving message")
 				continue
 			}
 			processData(data, acc)
+			inputTrips.AckMessage(id)
 			tripTurn <- s
 		}
 	}() // For trip
@@ -184,5 +191,5 @@ func main() {
 	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
-	common.WaitForSigterm(grace)
+	utils.WaitForSigterm(grace)
 }

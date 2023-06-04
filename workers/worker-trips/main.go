@@ -2,6 +2,8 @@ package main
 
 import (
 	common "github.com/Ignaciocl/tp1SisdisCommons"
+	"github.com/Ignaciocl/tp1SisdisCommons/queue"
+	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	"log"
 	"os"
 	"strconv"
@@ -54,9 +56,9 @@ const MontrealStation = "montreal"
 
 func processData(
 	trip WorkerTrip,
-	qm common.Queue[JoinerData[SendableDataMontreal], JoinerData[SendableDataMontreal]],
-	qs common.Queue[JoinerData[SendableDataAvg], JoinerData[SendableDataAvg]],
-	qt common.Queue[JoinerData[SendableDataWeather], JoinerData[SendableDataWeather]]) {
+	qm queue.Sender[JoinerData[SendableDataMontreal]],
+	qs queue.Sender[JoinerData[SendableDataAvg]],
+	qt queue.Sender[JoinerData[SendableDataWeather]]) {
 	buildMontreal := trip.City == MontrealStation
 	batchSize := len(trip.Data)
 	vm := make([]SendableDataMontreal, 0, batchSize)
@@ -92,7 +94,7 @@ func processData(
 			Data: vm,
 		})
 		if err != nil {
-			common.FailOnError(err, "Couldn't send message to joiner montreal, failing horribly")
+			utils.FailOnError(err, "Couldn't send message to joiner montreal, failing horribly")
 		}
 	}
 	err := qs.SendMessage(JoinerData[SendableDataAvg]{
@@ -102,7 +104,7 @@ func processData(
 		City: trip.City,
 	})
 	if err != nil {
-		common.FailOnError(err, "Couldn't send message to joiner stations, failing horribly")
+		utils.FailOnError(err, "Couldn't send message to joiner stations, failing horribly")
 	}
 	err = qt.SendMessage(JoinerData[SendableDataWeather]{
 		Key:  trip.Key,
@@ -111,7 +113,7 @@ func processData(
 		Data: va,
 	})
 	if err != nil {
-		common.FailOnError(err, "Couldn't send message to joiner stations, failing horribly")
+		utils.FailOnError(err, "Couldn't send message to joiner stations, failing horribly")
 	}
 }
 
@@ -119,11 +121,11 @@ func main() {
 
 	id := os.Getenv("id")
 	distributors, err := strconv.Atoi(os.Getenv("distributors"))
-	common.FailOnError(err, "missing env value of distributors")
-	inputQueue, _ := common.InitializeRabbitQueue[WorkerTrip, WorkerTrip]("tripWorkers", "rabbit", id, 0)
-	outputQueueMontreal, _ := common.InitializeRabbitQueue[JoinerData[SendableDataMontreal], JoinerData[SendableDataMontreal]]("montrealQueueTrip", "rabbit", "", 0)
-	outputQueueStations, _ := common.InitializeRabbitQueue[JoinerData[SendableDataAvg], JoinerData[SendableDataAvg]]("stationsQueueTrip", "rabbit", "", 0)
-	outputQueueWeather, _ := common.InitializeRabbitQueue[JoinerData[SendableDataWeather], JoinerData[SendableDataWeather]]("weatherQueueTrip", "rabbit", "", 0)
+	utils.FailOnError(err, "missing env value of distributors")
+	inputQueue, _ := queue.InitializeReceiver[WorkerTrip]("tripWorkers", "rabbit", id, "", nil)
+	outputQueueMontreal, _ := queue.InitializeSender[JoinerData[SendableDataMontreal]]("montrealQueueTrip", distributors, nil, "rabbit")
+	outputQueueStations, _ := queue.InitializeSender[JoinerData[SendableDataAvg]]("stationsQueueTrip", distributors, nil, "rabbit")
+	outputQueueWeather, _ := queue.InitializeSender[JoinerData[SendableDataWeather]]("weatherQueueTrip", distributors, nil, "rabbit")
 	v := make([]common.NextToNotify, 0, 3)
 	v = append(v, common.NextToNotify{
 		Name:       "montrealQueueTrip",
@@ -138,7 +140,7 @@ func main() {
 	iqEOF, _ := common.CreateConsumerEOF(v, "tripWorkers", inputQueue, distributors)
 	grace, _ := common.CreateGracefulManager("rabbit")
 	defer grace.Close()
-	defer common.RecoverFromPanic(grace, "")
+	defer utils.RecoverFromPanic(grace, "")
 	defer iqEOF.Close()
 	defer inputQueue.Close()
 	defer outputQueueMontreal.Close()
@@ -147,19 +149,21 @@ func main() {
 
 	go func() {
 		for {
-			data, err := inputQueue.ReceiveMessage()
+			data, msgId, err := inputQueue.ReceiveMessage()
 			if err != nil {
-				common.FailOnError(err, "Failed while receiving message")
+				utils.FailOnError(err, "Failed while receiving message")
 				continue
 			}
 			if data.EOF {
 				iqEOF.AnswerEofOk(data.IdempotencyKey, nil)
+				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 				continue
 			}
 			processData(data, outputQueueMontreal, outputQueueStations, outputQueueWeather)
+			utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 		}
 	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
-	common.WaitForSigterm(grace)
+	utils.WaitForSigterm(grace)
 }

@@ -2,6 +2,8 @@ package main
 
 import (
 	common "github.com/Ignaciocl/tp1SisdisCommons"
+	"github.com/Ignaciocl/tp1SisdisCommons/queue"
+	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	log "github.com/sirupsen/logrus"
 	"os"
 	"strings"
@@ -28,7 +30,7 @@ type SendableDataTrip struct {
 	EOF  bool          `json:"EOF"`
 }
 
-func SendMessagesToQueue(data []interface{}, queue common.Queue[SendableData, SendableData], city string) {
+func SendMessagesToQueue(data []interface{}, queue queue.Sender[SendableData], city string) {
 	for _, v := range data {
 		err := queue.SendMessage(SendableData{
 			City: city,
@@ -44,16 +46,16 @@ func SendMessagesToQueue(data []interface{}, queue common.Queue[SendableData, Se
 
 func main() {
 	id := os.Getenv("id")
-	inputQueue, _ := common.InitializeRabbitQueue[receivedData, receivedData]("distributor", "rabbit", id, 0)
-	wq, _ := common.InitializeRabbitQueue[SendableData, SendableData]("weatherWorkers", "rabbit", "", 3)
-	tq, _ := common.InitializeRabbitQueue[SendableDataTrip, SendableDataTrip]("tripWorkers", "rabbit", "", 3)
-	sq, _ := common.InitializeRabbitQueue[SendableData, SendableData]("stationWorkers", "rabbit", "", 3)
+	inputQueue, _ := queue.InitializeReceiver[receivedData]("distributor", "rabbit", id, "", nil)
+	wq, _ := queue.InitializeSender[SendableData]("weatherWorkers", 3, nil, "rabbit")
+	tq, _ := queue.InitializeSender[SendableDataTrip]("tripWorkers", 3, nil, "rabbit")
+	sq, _ := queue.InitializeSender[SendableData]("stationWorkers", 3, nil, "rabbit")
 	wqe, _ := common.CreateConsumerEOF([]common.NextToNotify{{Name: "weatherWorkers", Connection: wq}}, "distributor", inputQueue, 1)
 	tqe, _ := common.CreateConsumerEOF([]common.NextToNotify{{Name: "tripWorkers", Connection: tq}}, "distributor", inputQueue, 1)
 	sqe, _ := common.CreateConsumerEOF([]common.NextToNotify{{Name: "stationWorkers", Connection: sq}}, "distributor", inputQueue, 1)
 	grace, _ := common.CreateGracefulManager("rabbit")
 	defer grace.Close()
-	defer common.RecoverFromPanic(grace, "")
+	defer utils.RecoverFromPanic(grace, "")
 	defer wqe.Close()
 	defer inputQueue.Close()
 	defer wq.Close()
@@ -62,12 +64,12 @@ func main() {
 	// catch SIGETRM or SIGINTERRUPT
 	go func() {
 		pFile := ""
-		var queue common.Queue[SendableData, SendableData]
+		var sender queue.Sender[SendableData]
 		var me common.WaitForEof
 		for {
-			data, err := inputQueue.ReceiveMessage()
+			data, msgId, err := inputQueue.ReceiveMessage()
 			if err != nil {
-				common.FailOnError(err, "Failed while receiving message")
+				utils.FailOnError(err, "Failed while receiving message")
 				continue
 			}
 			if data.EOF {
@@ -78,20 +80,21 @@ func main() {
 				} else if strings.Contains(data.IdempotencyKey, "weather") {
 					me = wqe
 				} else {
-
+					utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 					continue
 				}
 
 				log.Infof("eof received and distributed for %v", data)
 				me.AnswerEofOk(data.IdempotencyKey, nil)
+				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 				continue
 			}
 			if pFile != data.File {
 				pFile = data.File
 				if pFile == "weather" {
-					queue = wq
+					sender = wq
 				} else if pFile == "stations" {
-					queue = sq
+					sender = sq
 				}
 			}
 			if pFile == "trips" {
@@ -101,10 +104,12 @@ func main() {
 					Key:  "random",
 					EOF:  false,
 				})
+				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 				continue
 			}
-			SendMessagesToQueue(data.Data, queue, data.City)
+			SendMessagesToQueue(data.Data, sender, data.City)
+			utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 		}
 	}()
-	common.WaitForSigterm(grace)
+	utils.WaitForSigterm(grace)
 }

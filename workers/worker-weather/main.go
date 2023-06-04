@@ -2,6 +2,8 @@ package main
 
 import (
 	common "github.com/Ignaciocl/tp1SisdisCommons"
+	"github.com/Ignaciocl/tp1SisdisCommons/queue"
+	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	"log"
 	"os"
 	"strconv"
@@ -14,7 +16,7 @@ const dateLayout = "2006-01-02"
 func getDate(date string) string {
 	d, err := time.Parse(dateLayout, date)
 	if err != nil {
-		common.FailOnError(err, "Invalid date while parsing")
+		utils.FailOnError(err, "Invalid date while parsing")
 	}
 	return strings.Split(d.AddDate(0, 0, -1).String(), " ")[0]
 }
@@ -45,7 +47,7 @@ type JoinerData struct {
 
 func processData(
 	weather WorkerWeather,
-	qt common.Queue[JoinerData, JoinerData]) {
+	qt queue.Sender[JoinerData]) {
 	if weather.Data.Prec < 30 {
 		return
 	}
@@ -59,16 +61,16 @@ func processData(
 	}
 	err := qt.SendMessage(d)
 	if err != nil {
-		common.FailOnError(err, "Couldn't send message to joiner stations, failing horribly")
+		utils.FailOnError(err, "Couldn't send message to joiner stations, failing horribly")
 	}
 }
 
 func main() {
 	id := os.Getenv("id")
 	distributors, err := strconv.Atoi(os.Getenv("distributors"))
-	common.FailOnError(err, "missing env value of distributors")
-	inputQueue, _ := common.InitializeRabbitQueue[WorkerWeather, WorkerWeather]("weatherWorkers", "rabbit", id, 0)
-	outputQueueWeather, _ := common.InitializeRabbitQueue[JoinerData, JoinerData]("weatherQueue", "rabbit", "", 0)
+	utils.FailOnError(err, "missing env value of distributors")
+	inputQueue, _ := queue.InitializeReceiver[WorkerWeather]("weatherWorkers", "rabbit", id, "", nil)
+	outputQueueWeather, _ := queue.InitializeSender[JoinerData]("weatherQueue", 0, inputQueue, "")
 	v := make([]common.NextToNotify, 1)
 	v = append(v, common.NextToNotify{
 		Name:       "weatherQueue",
@@ -77,26 +79,28 @@ func main() {
 	iqEOF, _ := common.CreateConsumerEOF(v, "weatherWorkers", inputQueue, distributors)
 	grace, _ := common.CreateGracefulManager("rabbit")
 	defer grace.Close()
-	defer common.RecoverFromPanic(grace, "")
+	defer utils.RecoverFromPanic(grace, "")
 	defer iqEOF.Close()
 	defer inputQueue.Close()
 	defer outputQueueWeather.Close()
 
 	go func() {
 		for {
-			data, err := inputQueue.ReceiveMessage()
+			data, msgId, err := inputQueue.ReceiveMessage()
 			if err != nil {
-				common.FailOnError(err, "Failed while receiving message")
+				utils.FailOnError(err, "Failed while receiving message")
 				continue
 			}
 			if data.EOF {
 				iqEOF.AnswerEofOk(data.IdempotencyKey, nil)
+				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 				continue
 			}
 			processData(data, outputQueueWeather)
+			inputQueue.AckMessage(msgId)
 		}
 	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
-	common.WaitForSigterm(grace)
+	utils.WaitForSigterm(grace)
 }

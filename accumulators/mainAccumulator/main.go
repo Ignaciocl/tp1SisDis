@@ -2,6 +2,8 @@ package main
 
 import (
 	common "github.com/Ignaciocl/tp1SisdisCommons"
+	"github.com/Ignaciocl/tp1SisdisCommons/queue"
+	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -59,29 +61,32 @@ func (a actionable) DoActionIfEOF() {
 }
 
 func main() {
-	inputQueue, _ := common.InitializeRabbitQueue[Accumulator, Accumulator]("accumulator", "rabbit", "", 0)
+	inputQueue, _ := queue.InitializeReceiver[Accumulator]("accumulator", "rabbit", "", "", nil)
 	me, _ := common.CreateConsumerEOF(nil, "accumulator", inputQueue, 3)
-	accumulatorInfo, _ := common.InitializeRabbitQueue[QueryResult, QueryResult]("accConnection", "rabbit", "", 0)
+	accumulatorInfo, _ := queue.InitializeSender[QueryResult, QueryResult]("accConnection", 0, nil, "rabbit")
 	grace, _ := common.CreateGracefulManager("rabbit")
 	defer grace.Close()
-	defer common.RecoverFromPanic(grace, "")
+	defer utils.RecoverFromPanic(grace, "")
 	defer accumulatorInfo.Close()
 	defer inputQueue.Close()
 	ns := make(chan struct{}, 1)
 	acc := make(map[string]QueryResponse)
 	go func() {
 		for {
-			data, err := inputQueue.ReceiveMessage()
+			data, msgId, err := inputQueue.ReceiveMessage()
 			if data.EOF {
 
 				me.AnswerEofOk(data.IdempotencyKey, actionable{nc: ns})
+				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 				continue
 			}
 			if err != nil {
-				common.FailOnError(err, "Failed while receiving message")
+				utils.FailOnError(err, "Failed while receiving message")
+				inputQueue.RejectMessage(msgId)
 				continue
 			}
 			processData(data, acc)
+			utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 		}
 	}()
 	go func() {
@@ -92,5 +97,5 @@ func main() {
 	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
-	common.WaitForSigterm(grace)
+	utils.WaitForSigterm(grace)
 }

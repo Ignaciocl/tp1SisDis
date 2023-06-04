@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
+	"github.com/Ignaciocl/tp1SisdisCommons/queue"
+	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	log "github.com/sirupsen/logrus"
 	"os"
 	"strconv"
@@ -48,7 +50,7 @@ type AccumulatorInfo struct {
 	common.EofData
 }
 
-func processData(station JoinerDataStation, accumulator map[string]sData, aq common.Queue[AccumulatorInfo, AccumulatorInfo]) {
+func processData(station JoinerDataStation, accumulator map[string]sData, aq queue.Sender[AccumulatorInfo]) {
 	if s := station.DataStation; s != nil {
 		accumulator[getStationKey(station.DataStation.Code, s.Year)] = sData{Long: station.DataStation.Longitude, Lat: station.DataStation.Latitude, Name: station.DataStation.Name}
 	} else if trip := station.DataTrip; trip != nil {
@@ -97,19 +99,19 @@ func (a actionable) DoActionIfEOF() {
 
 func main() {
 	amountCalc, err := strconv.Atoi(os.Getenv("calculators"))
-	common.FailOnError(err, "missing env value of calculator")
+	utils.FailOnError(err, "missing env value of calculator")
 	workerStation, err := strconv.Atoi(os.Getenv("amountStationsWorkers"))
-	common.FailOnError(err, "missing env value of worker stations")
+	utils.FailOnError(err, "missing env value of worker stations")
 	workerTrips, err := strconv.Atoi(os.Getenv("amountTripsWorkers"))
-	common.FailOnError(err, "missing env value of worker trips")
-	inputQueue, _ := common.InitializeRabbitQueue[JoinerDataStation, JoinerDataStation]("montrealQueue", "rabbit", "", 0)
-	inputQueueTrip, _ := common.InitializeRabbitQueue[JoinerDataStation, JoinerDataStation]("montrealQueueTrip", "rabbit", "", 0)
-	aq, _ := common.InitializeRabbitQueue[AccumulatorInfo, AccumulatorInfo]("calculatorMontreal", "rabbit", "", amountCalc)
+	utils.FailOnError(err, "missing env value of worker trips")
+	inputQueue, _ := queue.InitializeReceiver[JoinerDataStation]("montrealQueue", "rabbit", "", "", nil)
+	inputQueueTrip, _ := queue.InitializeReceiver[JoinerDataStation]("montrealQueueTrip", "rabbit", "", "", nil)
+	aq, _ := queue.InitializeSender[AccumulatorInfo]("calculatorMontreal", amountCalc, nil, "rabbit")
 	sfe, _ := common.CreateConsumerEOF(nil, "montrealQueue", inputQueue, workerStation)
 	tfe, _ := common.CreateConsumerEOF([]common.NextToNotify{{Name: "calculatorMontreal", Connection: aq}}, "montrealQueueTrip", inputQueueTrip, workerTrips)
 	grace, _ := common.CreateGracefulManager("rabbit")
 	defer grace.Close()
-	defer common.RecoverFromPanic(grace, "")
+	defer utils.RecoverFromPanic(grace, "")
 	defer inputQueue.Close()
 	defer aq.Close()
 	defer inputQueueTrip.Close()
@@ -118,50 +120,50 @@ func main() {
 	st <- struct{}{}
 	// catch SIGETRM or SIGINTERRUPT
 	acc := make(map[string]sData)
-	finished := false
 	go func() {
 		for {
-			data, err := inputQueue.ReceiveMessage()
+			data, msgId, err := inputQueue.ReceiveMessage()
 			if data.EOF {
 				sfe.AnswerEofOk(data.IdempotencyKey, actionable{
 					c:  st,
 					nc: tt,
 				})
+				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 				continue
 			}
 			d := <-st
 			if err != nil {
-				common.FailOnError(err, "Failed while receiving message")
+				utils.FailOnError(err, "Failed while receiving message")
 				continue
 			}
-			if finished {
-				log.Infof("message after eof %v", data)
-			}
 			processData(data, acc, aq)
+			utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 			st <- d
 		}
 	}()
 	go func() {
 		for {
-			data, err := inputQueueTrip.ReceiveMessage()
+			data, msgId, err := inputQueueTrip.ReceiveMessage()
 			if data.EOF {
 
 				tfe.AnswerEofOk(data.IdempotencyKey, actionable{
 					c:  tt,
 					nc: st,
 				})
+				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 				continue
 			}
 			d := <-tt
 			if err != nil {
-				common.FailOnError(err, "Failed while receiving message")
+				utils.FailOnError(err, "Failed while receiving message")
 				continue
 			}
 			processData(data, acc, aq)
+			utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 			tt <- d
 		}
 	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
-	common.WaitForSigterm(grace)
+	utils.WaitForSigterm(grace)
 }

@@ -2,6 +2,8 @@ package main
 
 import (
 	common "github.com/Ignaciocl/tp1SisdisCommons"
+	"github.com/Ignaciocl/tp1SisdisCommons/queue"
+	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 )
 
 type ReceivableDataStation struct {
@@ -68,12 +70,12 @@ func (a actionable) DoActionIfEOF() {
 }
 
 func main() {
-	inputQueue, _ := common.InitializeRabbitQueue[JoinerDataStation, JoinerDataStation]("preAccumulatorSt", "rabbit", "", 0)
-	aq, _ := common.InitializeRabbitQueue[AccumulatorData, AccumulatorData]("accumulator", "rabbit", "", 0)
+	inputQueue, _ := queue.InitializeReceiver[JoinerDataStation]("preAccumulatorSt", "rabbit", "", "", nil)
+	aq, _ := queue.InitializeSender[AccumulatorData]("accumulator", 0, nil, "rabbit")
 	sfe, _ := common.CreateConsumerEOF(nil, "preAccumulatorSt", inputQueue, 1)
 	grace, _ := common.CreateGracefulManager("rabbit")
 	defer grace.Close()
-	defer common.RecoverFromPanic(grace, "")
+	defer utils.RecoverFromPanic(grace, "")
 	defer sfe.Close()
 	defer inputQueue.Close()
 	defer aq.Close()
@@ -83,21 +85,22 @@ func main() {
 	acc := map[string]stationData{}
 	go func() {
 		for {
-			data, err := inputQueue.ReceiveMessage()
+			data, msgId, err := inputQueue.ReceiveMessage()
 			if data.EOF {
-
 				sfe.AnswerEofOk(data.IdempotencyKey, actionable{
 					c:  st,
 					nc: ns,
 				})
+				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
+				continue
+			}
+			if err != nil {
+				utils.FailOnError(err, "Failed while receiving message")
 				continue
 			}
 			p := <-st
-			if err != nil {
-				common.FailOnError(err, "Failed while receiving message")
-				continue
-			}
 			processData(data, acc)
+			utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 			st <- p
 		}
 	}()
@@ -134,5 +137,5 @@ func main() {
 		st <- struct{}{}
 	}()
 
-	common.WaitForSigterm(grace)
+	utils.WaitForSigterm(grace)
 }
