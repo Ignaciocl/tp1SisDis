@@ -126,7 +126,7 @@ func main() {
 	accumulatorInfo, _ := queue.InitializeReceiver[AccData]("accConnection", "rabbit", "", "", sender)
 	grace, _ := common.CreateGracefulManager("rabbit")
 	defer grace.Close()
-	defer utils.RecoverFromPanic(grace, "")
+	defer common.RecoverFromPanic(grace, "")
 
 	defer sender.Close()
 	defer client.CloseConnection()
@@ -147,7 +147,7 @@ func main() {
 	}()
 	go receivePolling(clientAcc, dq)
 	go receiveData(client, eofStarter, sender)
-	utils.WaitForSigterm(grace)
+	common.WaitForSigterm(grace)
 }
 
 func receiveData(client *Client, eofStarter common.Publisher, queue queue.Sender[dataToSend]) {

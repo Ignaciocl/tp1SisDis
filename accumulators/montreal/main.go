@@ -68,7 +68,7 @@ func main() {
 	me, _ := common.CreateConsumerEOF(nil, "preAccumulatorMontreal", inputQueue, amountCalc)
 	grace, _ := common.CreateGracefulManager("rabbit")
 	defer grace.Close()
-	defer utils.RecoverFromPanic(grace, "")
+	defer common.RecoverFromPanic(grace, "")
 	defer me.Close()
 	defer inputQueue.Close()
 	defer outputQueue.Close()
@@ -112,5 +112,5 @@ func main() {
 	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
-	utils.WaitForSigterm(grace)
+	common.WaitForSigterm(grace)
 }

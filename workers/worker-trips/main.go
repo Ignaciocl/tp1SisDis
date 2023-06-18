@@ -140,7 +140,7 @@ func main() {
 	iqEOF, _ := common.CreateConsumerEOF(v, "tripWorkers", inputQueue, distributors)
 	grace, _ := common.CreateGracefulManager("rabbit")
 	defer grace.Close()
-	defer utils.RecoverFromPanic(grace, "")
+	defer common.RecoverFromPanic(grace, "")
 	defer iqEOF.Close()
 	defer inputQueue.Close()
 	defer outputQueueMontreal.Close()
@@ -165,5 +165,5 @@ func main() {
 	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
-	utils.WaitForSigterm(grace)
+	common.WaitForSigterm(grace)
 }

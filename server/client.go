@@ -8,6 +8,8 @@ import (
 	"strconv"
 )
 
+const AMOUNT_BYTES_PREFIX = 5
+
 // ClientConfig Configuration used by the client
 type ClientConfig struct {
 	ServerAddress string
@@ -83,16 +85,15 @@ func (c *Client) AnswerClient(bytes []byte) error {
 }
 
 func (c *Client) ReceiveData() ([]byte, error) {
-	const sizeToRead = 5
-	bytesToRead := make([]byte, sizeToRead)
+	bytesToRead := make([]byte, AMOUNT_BYTES_PREFIX)
 	total := make([]byte, 0)
-	if i, err := c.conn.Read(bytesToRead); i < sizeToRead {
+	if i, err := c.conn.Read(bytesToRead); i < AMOUNT_BYTES_PREFIX {
 		bytesToRead = bytesToRead[0:i]
 		if err != nil {
-			log.Infof("error while reading is %v", err)
+			log.Errorf("error while reading is %v", err)
 		}
 		j := i
-		remaining := sizeToRead
+		remaining := AMOUNT_BYTES_PREFIX
 		for {
 			r := remaining - j
 			remaining -= j
@@ -107,7 +108,7 @@ func (c *Client) ReceiveData() ([]byte, error) {
 	}
 	n, err := strconv.Atoi(string(bytesToRead))
 	if err != nil {
-		log.Infof("error is %v while converting %s", err, string(bytesToRead))
+		log.Errorf("error is %v while converting %s", err, string(bytesToRead))
 	}
 	realN := n
 	received := make([]byte, n)
