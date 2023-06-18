@@ -96,7 +96,7 @@ func main() {
 				continue
 			}
 			ad := getAccumulatorData(data.Data)
-			aq.SendMessage(AccumulatorInfo{Data: ad})
+			aq.SendMessage(AccumulatorInfo{Data: ad}, "")
 			utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 		}
 	}()

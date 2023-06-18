@@ -180,13 +180,13 @@ func main() {
 				Key: "random",
 			}
 		}
-		_ = aq.SendMessage(l)
+		_ = aq.SendMessage(l, "")
 		eof := AccumulatorData{EofData: common.EofData{
 			EOF:            true,
 			IdempotencyKey: "random",
 		},
 		}
-		aq.SendMessage(eof)
+		aq.SendMessage(eof, "")
 		weatherTurn <- struct{}{}
 	}()
 

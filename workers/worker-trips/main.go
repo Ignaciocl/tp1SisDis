@@ -92,7 +92,7 @@ func processData(
 			Key:  trip.Key,
 			EOF:  trip.EOF,
 			Data: vm,
-		})
+		}, "")
 		if err != nil {
 			utils.FailOnError(err, "Couldn't send message to joiner montreal, failing horribly")
 		}
@@ -102,7 +102,7 @@ func processData(
 		EOF:  trip.EOF,
 		Data: vy,
 		City: trip.City,
-	})
+	}, "")
 	if err != nil {
 		utils.FailOnError(err, "Couldn't send message to joiner stations, failing horribly")
 	}
@@ -111,7 +111,7 @@ func processData(
 		EOF:  trip.EOF,
 		City: trip.City,
 		Data: va,
-	})
+	}, "")
 	if err != nil {
 		utils.FailOnError(err, "Couldn't send message to joiner stations, failing horribly")
 	}
@@ -123,9 +123,9 @@ func main() {
 	distributors, err := strconv.Atoi(os.Getenv("distributors"))
 	utils.FailOnError(err, "missing env value of distributors")
 	inputQueue, _ := queue.InitializeReceiver[WorkerTrip]("tripWorkers", "rabbit", id, "", nil)
-	outputQueueMontreal, _ := queue.InitializeSender[JoinerData[SendableDataMontreal]]("montrealQueueTrip", distributors, nil, "rabbit")
-	outputQueueStations, _ := queue.InitializeSender[JoinerData[SendableDataAvg]]("stationsQueueTrip", distributors, nil, "rabbit")
-	outputQueueWeather, _ := queue.InitializeSender[JoinerData[SendableDataWeather]]("weatherQueueTrip", distributors, nil, "rabbit")
+	outputQueueMontreal, _ := queue.InitializeSender[JoinerData[SendableDataMontreal]]("montrealQueueTrip", 0, nil, "rabbit") // Change this, should be empty, also for other workers
+	outputQueueStations, _ := queue.InitializeSender[JoinerData[SendableDataAvg]]("stationsQueueTrip", 0, nil, "rabbit")      // Change this, should be empty, also for other workers
+	outputQueueWeather, _ := queue.InitializeSender[JoinerData[SendableDataWeather]]("weatherQueueTrip", 0, nil, "rabbit")    // Change this, should be empty, also for other workers
 	v := make([]common.NextToNotify, 0, 3)
 	v = append(v, common.NextToNotify{
 		Name:       "montrealQueueTrip",

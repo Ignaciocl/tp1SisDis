@@ -37,7 +37,7 @@ func SendMessagesToQueue(data []interface{}, queue queue.Sender[SendableData], c
 			Data: v,
 			Key:  "random",
 			EOF:  false,
-		})
+		}, "")
 		if err != nil {
 
 		}
@@ -103,7 +103,7 @@ func main() {
 					Data: data.Data,
 					Key:  "random",
 					EOF:  false,
-				})
+				}, "")
 				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 				continue
 			}

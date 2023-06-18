@@ -2,7 +2,7 @@ module accumulator
 
 go 1.20
 
-require github.com/Ignaciocl/tp1SisdisCommons v0.5.10
+require github.com/Ignaciocl/tp1SisdisCommons v0.5.11
 
 require (
 	github.com/rabbitmq/amqp091-go v1.8.1 // indirect

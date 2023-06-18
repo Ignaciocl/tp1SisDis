@@ -107,8 +107,8 @@ func main() {
 				va = append(va, value)
 			}
 		}
-		_ = outputQueue.SendMessage(Accumulator{Stations: v, Key: "random"}) // do graceful shutdown
-		_ = outputQueue.SendMessage(Accumulator{EofData: d})
+		_ = outputQueue.SendMessage(Accumulator{Stations: v, Key: "random"}, "") // do graceful shutdown
+		_ = outputQueue.SendMessage(Accumulator{EofData: d}, "")
 	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")

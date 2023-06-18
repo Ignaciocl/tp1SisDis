@@ -56,13 +56,13 @@ func processData(station WorkerStation, qm, qs queue.Sender[JoinerDataStation]) 
 		EOF:  station.EOF,
 	}
 	if station.City == MontrealStation {
-		err := qm.SendMessage(js)
+		err := qm.SendMessage(js, "")
 		if err != nil {
 			utils.FailOnError(err, "Couldn't send message to joiner montreal, failing horribly")
 		}
 	}
 	if station.Data.Year == 2016 || station.Data.Year == 2017 {
-		err := qs.SendMessage(js)
+		err := qs.SendMessage(js, "")
 		if err != nil {
 			utils.FailOnError(err, "Couldn't send message to joiner stations, failing horribly")
 		}
@@ -74,8 +74,8 @@ func main() {
 	distributors, err := strconv.Atoi(os.Getenv("distributors"))
 	utils.FailOnError(err, "missing env value of distributors")
 	inputQueue, _ := queue.InitializeReceiver[WorkerStation]("stationWorkers", "rabbit", id, "", nil)
-	outputQueueMontreal, _ := queue.InitializeSender[JoinerDataStation]("montrealQueue", distributors, nil, "rabbit")
-	outputQueueStations, _ := queue.InitializeSender[JoinerDataStation]("stationsQueue", distributors, nil, "rabbit")
+	outputQueueMontreal, _ := queue.InitializeSender[JoinerDataStation]("montrealQueue", 0, nil, "rabbit")
+	outputQueueStations, _ := queue.InitializeSender[JoinerDataStation]("stationsQueue", 0, nil, "rabbit")
 	v := make([]common.NextToNotify, 2)
 	v = append(v, common.NextToNotify{
 		Name:       "montrealQueue",
