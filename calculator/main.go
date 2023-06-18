@@ -83,7 +83,7 @@ func main() {
 	me, _ := common.CreateConsumerEOF([]common.NextToNotify{{"preAccumulatorMontreal", aq}}, "calculatorMontreal", inputQueue, 1)
 	grace, _ := common.CreateGracefulManager("rabbit")
 	defer grace.Close()
-	defer utils.RecoverFromPanic(grace, "")
+	defer common.RecoverFromPanic(grace, "")
 	defer inputQueue.Close()
 	defer aq.Close()
 	go func() {
@@ -100,5 +100,5 @@ func main() {
 			utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 		}
 	}()
-	utils.WaitForSigterm(grace)
+	common.WaitForSigterm(grace)
 }

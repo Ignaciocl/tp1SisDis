@@ -55,7 +55,7 @@ func main() {
 	sqe, _ := common.CreateConsumerEOF([]common.NextToNotify{{Name: "stationWorkers", Connection: sq}}, "distributor", inputQueue, 1)
 	grace, _ := common.CreateGracefulManager("rabbit")
 	defer grace.Close()
-	defer utils.RecoverFromPanic(grace, "")
+	defer common.RecoverFromPanic(grace, "")
 	defer wqe.Close()
 	defer inputQueue.Close()
 	defer wq.Close()
@@ -111,5 +111,5 @@ func main() {
 			utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 		}
 	}()
-	utils.WaitForSigterm(grace)
+	common.WaitForSigterm(grace)
 }

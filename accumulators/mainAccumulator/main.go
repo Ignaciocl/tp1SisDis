@@ -63,10 +63,10 @@ func (a actionable) DoActionIfEOF() {
 func main() {
 	inputQueue, _ := queue.InitializeReceiver[Accumulator]("accumulator", "rabbit", "", "", nil)
 	me, _ := common.CreateConsumerEOF(nil, "accumulator", inputQueue, 3)
-	accumulatorInfo, _ := queue.InitializeSender[QueryResult, QueryResult]("accConnection", 0, nil, "rabbit")
+	accumulatorInfo, _ := queue.InitializeSender[QueryResult]("accConnection", 0, nil, "rabbit")
 	grace, _ := common.CreateGracefulManager("rabbit")
 	defer grace.Close()
-	defer utils.RecoverFromPanic(grace, "")
+	defer common.RecoverFromPanic(grace, "")
 	defer accumulatorInfo.Close()
 	defer inputQueue.Close()
 	ns := make(chan struct{}, 1)
@@ -97,5 +97,5 @@ func main() {
 	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
-	utils.WaitForSigterm(grace)
+	common.WaitForSigterm(grace)
 }

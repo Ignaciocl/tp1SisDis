@@ -165,10 +165,14 @@ services:
     ports:
     - 3034:9000
     - 3334:3334
+    volumes:
+      - './server/main.go:/app/main.go'
   worker-station1:
     build:
       context: ./workers/worker-stations
     container_name: worker-station1
+    volumes:
+      - './workers/worker-stations/main.go:/app/main.go'
     depends_on:
       rabbit:
         condition: service_healthy
@@ -181,6 +185,8 @@ services:
     build:
       context: ./workers/worker-stations
     container_name: worker-station2
+    volumes:
+      - './workers/worker-stations/main.go:/app/main.go'
     depends_on:
       rabbit:
         condition: service_healthy
@@ -193,6 +199,8 @@ services:
     build:
       context: ./workers/worker-stations
     container_name: worker-station3
+    volumes:
+      - './workers/worker-stations/main.go:/app/main.go'
     depends_on:
       rabbit:
         condition: service_healthy

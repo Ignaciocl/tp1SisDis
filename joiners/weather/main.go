@@ -91,7 +91,7 @@ func main() {
 	tqEOF, _ := common.CreateConsumerEOF(nil, "weatherQueueTrip", inputTrips, workerTrips)
 	grace, _ := common.CreateGracefulManager("rabbit")
 	defer grace.Close()
-	defer utils.RecoverFromPanic(grace, "")
+	defer common.RecoverFromPanic(grace, "")
 	defer wqEOF.Close()
 	defer tqEOF.Close()
 	defer inputQueue.Close()
@@ -191,5 +191,5 @@ func main() {
 	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
-	utils.WaitForSigterm(grace)
+	common.WaitForSigterm(grace)
 }

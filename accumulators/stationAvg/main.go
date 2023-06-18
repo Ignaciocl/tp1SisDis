@@ -75,7 +75,7 @@ func main() {
 	sfe, _ := common.CreateConsumerEOF(nil, "preAccumulatorSt", inputQueue, 1)
 	grace, _ := common.CreateGracefulManager("rabbit")
 	defer grace.Close()
-	defer utils.RecoverFromPanic(grace, "")
+	defer common.RecoverFromPanic(grace, "")
 	defer sfe.Close()
 	defer inputQueue.Close()
 	defer aq.Close()
@@ -137,5 +137,5 @@ func main() {
 		st <- struct{}{}
 	}()
 
-	utils.WaitForSigterm(grace)
+	common.WaitForSigterm(grace)
 }

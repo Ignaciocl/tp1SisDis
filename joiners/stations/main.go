@@ -147,7 +147,7 @@ func main() {
 	tfe, _ := common.CreateConsumerEOF([]common.NextToNotify{{"preAccumulatorSt", aq}}, "stationsQueueTrip", inputQueueTrip, workerTrips)
 	grace, _ := common.CreateGracefulManager("rabbit")
 	defer grace.Close()
-	defer utils.RecoverFromPanic(grace, "")
+	defer common.RecoverFromPanic(grace, "")
 	defer sfe.Close()
 	defer tfe.Close()
 	defer inputQueue.Close()
@@ -203,5 +203,5 @@ func main() {
 		}
 	}()
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
-	utils.WaitForSigterm(grace)
+	common.WaitForSigterm(grace)
 }
