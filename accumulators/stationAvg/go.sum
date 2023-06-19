@@ -32,6 +32,8 @@ github.com/Ignaciocl/tp1SisdisCommons v0.5.16 h1:xtVjwPt4HifGx8z6CYONrH2SEigGvxo
 github.com/Ignaciocl/tp1SisdisCommons v0.5.16/go.mod h1:CXI2LfiMoCFYA8LgpX2rWEJx+7xY9bWyH2cXVLONplE=
 github.com/Ignaciocl/tp1SisdisCommons v0.5.17 h1:ohIBXkUCohLTxmW9LmIkmJRch03hFYijdUmv0AwYlGc=
 github.com/Ignaciocl/tp1SisdisCommons v0.5.17/go.mod h1:CXI2LfiMoCFYA8LgpX2rWEJx+7xY9bWyH2cXVLONplE=
+github.com/Ignaciocl/tp1SisdisCommons v0.5.18 h1:4252MerNb58EeU4y2HNcivI6srpLJzS/jOgl9EE9pVU=
+github.com/Ignaciocl/tp1SisdisCommons v0.5.18/go.mod h1:CXI2LfiMoCFYA8LgpX2rWEJx+7xY9bWyH2cXVLONplE=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/kr/pretty v0.1.0/go.mod h1:dAy3ld7l9f0ibDNOQOHHMYYIIbhfbHSm3C4ZsoJORNo=

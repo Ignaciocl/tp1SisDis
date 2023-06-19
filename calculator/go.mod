@@ -3,7 +3,7 @@ module calculatorDistance
 go 1.20
 
 require (
-	github.com/Ignaciocl/tp1SisdisCommons v0.5.17
+	github.com/Ignaciocl/tp1SisdisCommons v0.5.18
 	github.com/umahmood/haversine v0.0.0-20151105152445-808ab04add26
 )
 
