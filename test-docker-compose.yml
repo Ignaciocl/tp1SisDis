@@ -1,0 +1,46 @@
+networks:
+  bikers:
+    name: we are bikers
+services:
+  rabbit:
+    container_name: rabbitContainer
+    healthcheck:
+      interval: 30s
+      retries: 10
+      test: rabbitmq-diagnostics check_port_connectivity
+      timeout: 30s
+    image: rabbitmq:management
+    networks:
+      - bikers
+    ports:
+      - 5672:5672
+      - 15672:15672
+
+  server:
+    build:
+      context: ./server/
+    container_name: server
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+      - distributors=3
+    networks:
+      - bikers
+    ports:
+      - 3034:9000
+      - 3334:3334
+    volumes:
+      - './server/main.go:/app/main.go'
+
+  diosito:
+    build:
+      context: ./healthchecker/
+    container_name: diosito
+    depends_on:
+      - server
+    networks:
+      - bikers
+    volumes:
+      - './healthchecker/main.go:/app/main.go'
+      - '/var/run/docker.sock:/var/run/docker.sock'

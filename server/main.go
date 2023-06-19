@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
-	"github.com/Ignaciocl/tp1SisdisCommons/client"
+	commonHealthcheck "github.com/Ignaciocl/tp1SisdisCommons/healthcheck"
 	"github.com/Ignaciocl/tp1SisdisCommons/queue"
 	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	"github.com/sirupsen/logrus"
@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 )
+
+const serviceName = "server"
 
 // InitConfig Function that uses viper library to parse configuration parameters.
 // Viper is configured to read variables from both environment variables and the
@@ -148,9 +150,14 @@ func main() {
 	}()
 	go receivePolling(clientAcc, dq)
 	go receiveData(client, eofStarter, sender)
+
+	healthCheckHandler, err := commonHealthcheck.InitHealthChecker(serviceName)
+	if err != nil {
+		log.Errorf("error initializating health checker: %v", err)
+	}
 	go func() {
-		err := runHealthcheck("server")
-		log.Errorf("error healtchecker: %v", err)
+		err := healthCheckHandler.Run()
+		log.Errorf("healtchecker error: %v", err)
 	}()
 	common.WaitForSigterm(grace)
 }
@@ -221,7 +228,7 @@ func receivePolling(clientAcc *Client, dq dataQuery) {
 	}
 }
 
-// runHealthcheck initialize the health check routine. This routine listen for heartbeats in a given port and replies with
+/*// runHealthcheck initialize the health check routine. This routine listen for heartbeats in a given port and replies with
 // an ACK message
 func runHealthcheck(serviceName string) error {
 	cfg := struct {
@@ -289,4 +296,4 @@ func getLogMessage(service string, message string, err error) string {
 		return fmt.Sprintf("[service: %s][status: ERROR] %s: %v", service, message, err)
 	}
 	return fmt.Sprintf("[service: %s][status: OK] %s", service, message)
-}
+}*/
