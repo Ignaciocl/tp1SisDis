@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
+	"github.com/Ignaciocl/tp1SisdisCommons/client"
 	"github.com/Ignaciocl/tp1SisdisCommons/queue"
 	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	"github.com/sirupsen/logrus"
@@ -147,6 +148,10 @@ func main() {
 	}()
 	go receivePolling(clientAcc, dq)
 	go receiveData(client, eofStarter, sender)
+	go func() {
+		err := runHealthcheck("server")
+		log.Errorf("error healtchecker: %v", err)
+	}()
 	common.WaitForSigterm(grace)
 }
 
@@ -188,7 +193,7 @@ func receiveData(client *Client, eofStarter common.Publisher, queue queue.Sender
 			File: data.File,
 			Data: data.Data,
 			City: city,
-		})
+		}, "pepito")
 		if err != nil {
 			log.Errorf("error happened: %v", err)
 		}
@@ -214,4 +219,74 @@ func receivePolling(clientAcc *Client, dq dataQuery) {
 			break
 		}
 	}
+}
+
+// runHealthcheck initialize the health check routine. This routine listen for heartbeats in a given port and replies with
+// an ACK message
+func runHealthcheck(serviceName string) error {
+	cfg := struct {
+		Protocol           string
+		PacketLimit        int
+		Port               int
+		HealthCheckACK     string
+		HealthCheckMessage string
+	}{
+		Protocol:           "tcp",
+		PacketLimit:        8 * 1024,
+		Port:               6969,
+		HealthCheckACK:     "seras castigada",
+		HealthCheckMessage: "te estas portando mal",
+	}
+
+	address := fmt.Sprintf("%s:%v", serviceName, cfg.Port)
+	socket := client.NewSocket(
+		client.NewSocketConfig(
+			cfg.Protocol,
+			address,
+			cfg.PacketLimit,
+		),
+	)
+
+	err := socket.StartListener()
+	if err != nil {
+		return err
+	}
+
+	messageHandler, err := socket.AcceptNewConnections()
+	if err != nil {
+		return err
+	}
+
+	for {
+		message, err := messageHandler.Listen()
+		if err != nil {
+			log.Error(getLogMessage(serviceName, "error listening heartbeat. Accepting new connections", err))
+			messageHandler, err = socket.AcceptNewConnections() // ToDo: check this
+			if err != nil {
+				log.Error(getLogMessage(serviceName, "error accepting new connections", err))
+				return err
+			}
+			continue
+		}
+
+		log.Debugf("Message: %s", string(message))
+		log.Debug(getLogMessage(serviceName, "got heartbeat message correctly! Sending ACK...", nil))
+
+		if string(message) == cfg.HealthCheckMessage {
+			log.Debug(getLogMessage(serviceName, "got heartbeat message correctly! Sending ACK...", nil))
+			healthCheckACKBytes := []byte(cfg.HealthCheckACK)
+			err := messageHandler.Send(healthCheckACKBytes)
+			if err != nil {
+				log.Error(getLogMessage(serviceName, "error sending ACK message for heartbeat", err))
+			}
+		}
+	}
+
+}
+
+func getLogMessage(service string, message string, err error) string {
+	if err != nil {
+		return fmt.Sprintf("[service: %s][status: ERROR] %s: %v", service, message, err)
+	}
+	return fmt.Sprintf("[service: %s][status: OK] %s", service, message)
 }
