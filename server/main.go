@@ -151,10 +151,7 @@ func main() {
 	go receivePolling(clientAcc, dq)
 	go receiveData(client, eofStarter, sender)
 
-	healthCheckHandler, err := commonHealthcheck.InitHealthChecker(serviceName)
-	if err != nil {
-		log.Errorf("error initializating health checker: %v", err)
-	}
+	healthCheckHandler := commonHealthcheck.InitHealthChecker(serviceName)
 	go func() {
 		err := healthCheckHandler.Run()
 		log.Errorf("healtchecker error: %v", err)
