@@ -2,6 +2,142 @@ networks:
   bikers:
     name: we are bikers
 services:
+  accumulator-main:
+    build:
+      context: ./accumulators/mainAccumulator
+    container_name: accumulatorMain
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    networks:
+      - bikers
+    volumes:
+      - ./accumulators/mainAccumulator/main.go/:/app/main.go
+  accumulator-montreal:
+    build:
+      context: ./accumulators/montreal
+    container_name: accumulatorMontreal
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+      - calculators=3
+    networks:
+      - bikers
+  accumulator-stations:
+    build:
+      context: ./accumulators/stationAvg
+    container_name: accumulatorStationAvg
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    networks:
+      - bikers
+    volumes:
+      - ./accumulators/stationAvg/main.go/:/app/main.go
+  calculator1:
+    build:
+      context: ./calculator
+    container_name: calculator1
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+      - id=1
+    networks:
+      - bikers
+  calculator2:
+    build:
+      context: ./calculator
+    container_name: calculator2
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+      - id=2
+    networks:
+      - bikers
+  calculator3:
+    build:
+      context: ./calculator
+    container_name: calculator3
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+      - id=3
+    networks:
+      - bikers
+  distributor1:
+    build:
+      context: ./distributor
+    container_name: distributor1
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+      - id=1
+    networks:
+      - bikers
+  distributor2:
+    build:
+      context: ./distributor
+    container_name: distributor2
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+      - id=2
+    networks:
+      - bikers
+  distributor3:
+    build:
+      context: ./distributor
+    container_name: distributor3
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+      - id=3
+    networks:
+      - bikers
+  joiner-montreal:
+    build:
+      context: ./joiners/montreal
+    container_name: joinerMontreal
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+      - calculators=3
+      - amountStationsWorkers=3
+      - amountTripsWorkers=3
+    networks:
+      - bikers
+  joiner-stations:
+    build:
+      context: ./joiners/stations
+    container_name: joinerStation
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+      - amountStationsWorkers=3
+      - amountTripsWorkers=3
+    networks:
+      - bikers
+  joiner-weather:
+    build:
+      context: ./joiners/weather
+    container_name: joinerWeather
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+      - amountWeatherWorkers=3
+      - amountTripsWorkers=3
+    networks:
+      - bikers
   rabbit:
     container_name: rabbitContainer
     healthcheck:
@@ -15,7 +151,6 @@ services:
     ports:
       - 5672:5672
       - 15672:15672
-
   server:
     build:
       context: ./server/
@@ -30,8 +165,114 @@ services:
     ports:
       - 3034:9000
       - 3334:3334
-    volumes:
-      - './server/main.go:/app/main.go'
+  worker-station1:
+    build:
+      context: ./workers/worker-stations
+    container_name: worker-station1
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+      - id=1
+      - distributors=3
+    networks:
+      - bikers
+  worker-station2:
+    build:
+      context: ./workers/worker-stations
+    container_name: worker-station2
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+      - id=2
+      - distributors=3
+    networks:
+      - bikers
+  worker-station3:
+    build:
+      context: ./workers/worker-stations
+    container_name: worker-station3
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+      - id=3
+      - distributors=3
+    networks:
+      - bikers
+  worker-trip1:
+    build:
+      context: ./workers/worker-trips
+    container_name: worker-trip1
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+      - id=1
+      - distributors=3
+    networks:
+      - bikers
+  worker-trip2:
+    build:
+      context: ./workers/worker-trips
+    container_name: worker-trip2
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+      - id=2
+      - distributors=3
+    networks:
+      - bikers
+  worker-trip3:
+    build:
+      context: ./workers/worker-trips
+    container_name: worker-trip3
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+      - id=3
+      - distributors=3
+    networks:
+      - bikers
+  worker-weather1:
+    build:
+      context: ./workers/worker-weather
+    container_name: worker-weather1
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+      - id=1
+      - distributors=3
+    networks:
+      - bikers
+  worker-weather2:
+    build:
+      context: ./workers/worker-weather
+    container_name: worker-weather2
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+      - id=2
+      - distributors=3
+    networks:
+      - bikers
+  worker-weather3:
+    build:
+      context: ./workers/worker-weather
+    container_name: worker-weather3
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+      - id=3
+      - distributors=3
+    networks:
+      - bikers
 
   diosito:
     build:

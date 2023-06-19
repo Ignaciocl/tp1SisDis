@@ -116,7 +116,6 @@ func (hc *HealthChecker) checkServiceStatus(socket common.Client, errorChannel c
 				continue
 			}
 
-			log.Debugf("Lichita: recibi esta respuesta: %s", string(response))
 			if string(response) != hc.config.ExpectedResponse {
 				retryTicker = time.NewTicker(hc.config.RetryDelay)
 				continue
