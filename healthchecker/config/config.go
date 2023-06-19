@@ -2,13 +2,12 @@ package config
 
 import (
 	"fmt"
+	"github.com/Ignaciocl/tp1SisdisCommons/configloader"
 	"gopkg.in/yaml.v3"
-	"io"
-	"os"
 	"time"
 )
 
-const configFilepath = ".config/config.yaml"
+const configFilepath = "config/config.yaml"
 
 type HealthCheckerConfig struct {
 	Port             int           `yaml:"healthcheck_port"`
@@ -20,10 +19,11 @@ type HealthCheckerConfig struct {
 	RetryDelay       time.Duration `yaml:"retry_delay"`
 	Interval         time.Duration `yaml:"interval"`
 	Services         []string      `yaml:"services"`
+	TTL              int           `yaml:"ttl"`
 }
 
 func LoadConfig() (*HealthCheckerConfig, error) {
-	configFile, err := getConfigFile(configFilepath)
+	configFile, err := configloader.GetConfigFileAsBytes(configFilepath)
 	if err != nil {
 		return nil, err
 	}
@@ -35,18 +35,4 @@ func LoadConfig() (*HealthCheckerConfig, error) {
 	}
 
 	return &healthCheckerConfig, nil
-}
-
-func getConfigFile(filepath string) ([]byte, error) {
-	configFile, err := os.Open(filepath)
-	if err != nil {
-		return nil, fmt.Errorf("error opening config file: %s", err)
-	}
-
-	configFileBytes, err := io.ReadAll(configFile)
-	if err != nil {
-		return nil, fmt.Errorf("error reading config file: %s", err)
-	}
-
-	return configFileBytes, nil
 }
