@@ -74,30 +74,32 @@ func (hc *HealthChecker) checkServiceStatus(socket common.Client, errorChannel c
 		if retriesCounter == hc.config.MaxRetries {
 			retryTicker.Stop()
 			_ = socket.Close()
-			//errorChannel <- fmt.Errorf("%w: %s does not respond", errServiceUnhealthy, serviceName)
+			//errorChannel <- fmt.Errorf("%w: %s does not respond", errServiceUnhealthy, serviceName) // ToDo: talk with Nacho about using this channel in some cases
 			log.Errorf("%s: %s does not respond", errServiceUnhealthy, serviceName)
 			err := hc.hastaLaVistaBaby(serviceName)
 			if err != nil {
-				panic(err)
+				log.Errorf("%v", err)
+				continue
 			}
 
-			log.Debug("Lichita, lo matamos de forma correcta")
-			time.Sleep(3 * time.Second)
-
-			log.Debug("A revivirlo")
 			err = hc.bringMeToLife(serviceName)
 			if err != nil {
-				panic(err)
+				log.Errorf("%v", err)
+				continue
 			}
 
-			log.Debug("Revivio el hdp")
-			time.Sleep(10 * time.Second)
+			time.Sleep(hc.config.GraceTime)
+
 			err = socket.OpenConnection()
 			if err != nil {
-				panic(err)
+				log.Errorf("%s: %v", errSettingConnection, err)
+				continue
 			}
-			log.Debug("La conexion volvio perro")
+			retriesCounter = 0
+			intervalTicker.Reset(hc.config.Interval)
+			continue
 		}
+
 		select {
 		case <-intervalTicker.C:
 			// Send a new heartbeat
@@ -107,8 +109,6 @@ func (hc *HealthChecker) checkServiceStatus(socket common.Client, errorChannel c
 				retryTicker = time.NewTicker(hc.config.RetryDelay)
 				continue
 			}
-
-			log.Debug("Lichita: Message sent correctly")
 
 			response, err := socket.Listen()
 			if err != nil {
@@ -123,7 +123,7 @@ func (hc *HealthChecker) checkServiceStatus(socket common.Client, errorChannel c
 			}
 
 		case <-retryTicker.C:
-			log.Debug("HUBO UN ERROR LICHITA, TAMOS REINTENTANDO")
+			log.Debug("Some error occurs, trying again...")
 			retriesCounter += 1
 			err := socket.Send(heartbeatBytes)
 			if err != nil {
@@ -154,8 +154,7 @@ func (hc *HealthChecker) hastaLaVistaBaby(containerName string) error {
 
 	err = dockerCli.ContainerStop(context.Background(), containerName, container.StopOptions{Timeout: &hc.config.TTL})
 	if err != nil {
-		log.Errorf("Couldt stop container %s: %v", containerName, err)
-		return err
+		return fmt.Errorf("%w: couldn't stop service '%s': %v", errKillingService, containerName, err)
 	}
 
 	log.Debugf("Container %s stopped successfully", containerName)
@@ -173,22 +172,18 @@ func (hc *HealthChecker) bringMeToLife(containerName string) error {
 
 	err = dockerCli.ContainerRestart(context.Background(), containerName, container.StopOptions{})
 	if err != nil {
-		log.Errorf("Couldt bring back to life container %s: %v", containerName, err)
-		return err
+		return fmt.Errorf("%w: couldn't bring back to life service '%s': %v", errBringingBackToLifeService, containerName, err)
 	}
 
-	log.Debugf("Container %s bringed back to life succesffully", containerName)
+	log.Debugf("Container %s bringed back to life succesffully!", containerName)
 	return nil
 }
 
 // getDockerClient returns a docker client initialized it
 func getDockerClient() (dockerClient.APIClient, error) {
-	// Create a Docker client
-	//socketPath := "unix:///Users/litorresetti/.colima/default/docker.sock"
-	//cli, err := dockerClient.NewClientWithOpts(dockerClient.WithHost(socketPath), dockerClient.WithAPIVersionNegotiation())
 	cli, err := dockerClient.NewClientWithOpts(dockerClient.FromEnv, dockerClient.WithAPIVersionNegotiation())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %v", errDockerClient, err)
 	}
 	return cli, err
 }

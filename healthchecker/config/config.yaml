@@ -6,6 +6,7 @@ healthcheck_response: 'seras castigada'
 max_retries: 3
 retry_delay: 1s
 interval: 5s
+grace_time: 2s
 ttl: 5
 
 services:

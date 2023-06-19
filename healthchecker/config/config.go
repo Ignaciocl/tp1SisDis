@@ -18,6 +18,7 @@ type HealthCheckerConfig struct {
 	MaxRetries       int           `yaml:"max_retries"`
 	RetryDelay       time.Duration `yaml:"retry_delay"`
 	Interval         time.Duration `yaml:"interval"`
+	GraceTime        time.Duration `yaml:"grace_time"`
 	Services         []string      `yaml:"services"`
 	TTL              int           `yaml:"ttl"`
 }
