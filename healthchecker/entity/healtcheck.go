@@ -32,7 +32,7 @@ func (hc *HealthChecker) Run() error {
 			hc.config.PacketLimit,
 		))
 
-		err := socket.OpenConnection()
+		err := setConnection(socket, hc.config.MaxConnectionRetries, hc.config.ConnectionRetryDelay)
 		if err != nil {
 			return err
 		}
@@ -88,13 +88,11 @@ func (hc *HealthChecker) checkServiceStatus(socket common.Client, errorChannel c
 				continue
 			}
 
-			time.Sleep(hc.config.GraceTime)
-
-			err = socket.OpenConnection()
+			err = setConnection(socket, hc.config.MaxConnectionRetries, hc.config.ConnectionRetryDelay)
 			if err != nil {
-				log.Errorf("%s: %v", errSettingConnection, err)
 				continue
 			}
+
 			retriesCounter = 0
 			intervalTicker.Reset(hc.config.Interval)
 			continue
@@ -120,6 +118,7 @@ func (hc *HealthChecker) checkServiceStatus(socket common.Client, errorChannel c
 				retryTicker = time.NewTicker(hc.config.RetryDelay)
 				continue
 			}
+			log.Debugf("got heartbeat response '%s'", string(response))
 
 		case <-retryTicker.C:
 			log.Debug("Some error occurs, trying again...")
@@ -158,7 +157,6 @@ func (hc *HealthChecker) hastaLaVistaBaby(containerName string) error {
 
 	log.Debugf("Container %s stopped successfully", containerName)
 	return nil
-
 }
 
 // bringMeToLife brings back to life a container
@@ -175,6 +173,26 @@ func (hc *HealthChecker) bringMeToLife(containerName string) error {
 	}
 
 	log.Debugf("Container %s bringed back to life succesffully!", containerName)
+	return nil
+}
+
+// setConnection tries to open a connection with the given socket. If an error occurs it tries at most maxRetries times
+// with a retryDelay between attempts
+func setConnection(socket common.Client, maxRetries int, retryDelay time.Duration) error {
+	connectionRetriesCounter := 0
+	for {
+		if connectionRetriesCounter == maxRetries {
+			return fmt.Errorf("%w", errSettingConnection)
+		}
+
+		err := socket.OpenConnection()
+		if err == nil {
+			break
+		}
+
+		connectionRetriesCounter += 1
+		time.Sleep(retryDelay)
+	}
 	return nil
 }
 
