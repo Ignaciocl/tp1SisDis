@@ -104,6 +104,7 @@ func (dq dataQuery) writeQueryValue(data map[string]interface{}) {
 }
 
 func main() {
+	healthCheckHandler, err := commonHealthcheck.InitHealthChecker(serviceName)
 	distributors, err := strconv.Atoi(os.Getenv("distributors"))
 	utils.FailOnError(err, "missing env value of distributors")
 	v, err := InitConfig()
@@ -151,7 +152,7 @@ func main() {
 	go receivePolling(clientAcc, dq)
 	go receiveData(client, eofStarter, sender)
 
-	healthCheckHandler, err := commonHealthcheck.InitHealthChecker(serviceName)
+	//healthCheckHandler, err := commonHealthcheck.InitHealthChecker(serviceName)
 	if err != nil {
 		log.Errorf("error initializating health checker: %v", err)
 	}

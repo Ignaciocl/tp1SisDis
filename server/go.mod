@@ -3,7 +3,7 @@ module server
 go 1.20
 
 require (
-	github.com/Ignaciocl/tp1SisdisCommons v0.5.14
+	github.com/Ignaciocl/tp1SisdisCommons v0.5.16
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/viper v1.15.0
 )
