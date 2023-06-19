@@ -21,6 +21,7 @@ require (
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.0.2 // indirect
+	github.com/rabbitmq/amqp091-go v1.8.1 // indirect
 	github.com/stretchr/testify v1.8.0 // indirect
 	golang.org/x/mod v0.8.0 // indirect
 	golang.org/x/net v0.6.0 // indirect
