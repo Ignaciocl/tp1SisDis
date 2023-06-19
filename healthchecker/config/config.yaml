@@ -7,7 +7,7 @@ max_retries: 5
 retry_delay: 1s
 interval: 5s
 max_connection_retries: 10
-connection_retry_delay: 500ms
+connection_retry_delay: 1s
 ttl: 5
 
 services:

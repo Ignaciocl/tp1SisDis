@@ -71,7 +71,7 @@ func (hc *HealthChecker) checkServiceStatus(socket common.Client, errorChannel c
 	heartbeatBytes := []byte(hc.config.Message)
 
 	for {
-		if retriesCounter == hc.config.MaxRetries {
+		if retriesCounter >= hc.config.MaxRetries {
 			retryTicker.Stop()
 			_ = socket.Close()
 			//errorChannel <- fmt.Errorf("%w: %s does not respond", errServiceUnhealthy, serviceName) // ToDo: talk with Nacho about using this channel in some cases
@@ -101,7 +101,6 @@ func (hc *HealthChecker) checkServiceStatus(socket common.Client, errorChannel c
 		select {
 		case <-intervalTicker.C:
 			// Send a new heartbeat
-			retriesCounter = 0
 			err := socket.Send(heartbeatBytes)
 			if err != nil {
 				retryTicker = time.NewTicker(hc.config.RetryDelay)
@@ -119,6 +118,7 @@ func (hc *HealthChecker) checkServiceStatus(socket common.Client, errorChannel c
 				continue
 			}
 			log.Debugf("got heartbeat response '%s'", string(response))
+			retriesCounter = 0
 
 		case <-retryTicker.C:
 			log.Debug("Some error occurs, trying again...")
