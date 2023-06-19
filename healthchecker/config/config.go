@@ -20,7 +20,6 @@ type HealthCheckerConfig struct {
 	RetryDelay           time.Duration `yaml:"retry_delay"`
 	ConnectionRetryDelay time.Duration `yaml:"connection_retry_delay"`
 	Interval             time.Duration `yaml:"interval"`
-	GraceTime            time.Duration `yaml:"grace_time"`
 	Services             []string      `yaml:"services"`
 	TTL                  int           `yaml:"ttl"`
 }

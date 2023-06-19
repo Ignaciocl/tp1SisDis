@@ -3,12 +3,11 @@ packet_limit: 8192 # 8 * 1024
 protocol: "tcp"
 healthcheck_message: 'te estas portando mal'
 healthcheck_response: 'seras castigada'
-max_retries: 3
+max_retries: 5
 retry_delay: 1s
 interval: 5s
-grace_time: 2s
 max_connection_retries: 10
-connection_retry_delay: 400ms
+connection_retry_delay: 500ms
 ttl: 5
 
 services:
