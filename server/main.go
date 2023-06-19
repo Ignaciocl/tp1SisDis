@@ -200,7 +200,7 @@ func receiveData(client *Client, eofStarter common.Publisher, queue queue.Sender
 			File: data.File,
 			Data: data.Data,
 			City: city,
-		}, "pepito")
+		}, "")
 		if err != nil {
 			log.Errorf("error happened: %v", err)
 		}

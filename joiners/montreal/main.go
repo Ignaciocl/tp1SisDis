@@ -3,68 +3,42 @@ package main
 import (
 	"fmt"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
+	"github.com/Ignaciocl/tp1SisdisCommons/fileManager"
 	"github.com/Ignaciocl/tp1SisdisCommons/queue"
 	"github.com/Ignaciocl/tp1SisdisCommons/utils"
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+	"io"
 	"os"
 	"strconv"
 )
-
-type SendableDataStation struct {
-	Code      string `json:"code"`
-	Name      string `json:"name"`
-	Latitude  string `json:"latitude"`
-	Longitude string `json:"longitude"`
-	Year      int    `json:"year"`
-}
-
-type SendableDataTrip struct {
-	OStation string `json:"o_station"`
-	EStation string `json:"e_station"`
-	Year     int    `json:"year"`
-}
-type JoinerDataStation struct {
-	DataStation *SendableDataStation `json:"stationData,omitempty"`
-	DataTrip    *[]SendableDataTrip  `json:"tripData,omitempty"`
-	Name        string               `json:"name,omitempty"`
-	Key         string               `json:"key,omitempty"`
-	common.EofData
-}
-
-type sData struct {
-	Lat  string
-	Long string
-	Name string
-}
-
-type AccumulatorData struct {
-	OLat  string `json:"o_lat"`
-	OLong string `json:"o_long"`
-	FLat  string `json:"f_lat"`
-	FLong string `json:"f_long"`
-	Name  string `json:"name"`
-}
 
 type AccumulatorInfo struct {
 	Data []AccumulatorData `json:"data"`
 	common.EofData
 }
 
-func processData(station JoinerDataStation, accumulator map[string]sData, aq queue.Sender[AccumulatorInfo]) {
+func processData(station JoinerDataStation, accumulator map[string]sData) {
 	if s := station.DataStation; s != nil {
 		accumulator[getStationKey(station.DataStation.Code, s.Year)] = sData{Long: station.DataStation.Longitude, Lat: station.DataStation.Latitude, Name: station.DataStation.Name}
-	} else if trip := station.DataTrip; trip != nil {
-		t := *trip
-		vToSend := make([]AccumulatorData, 0, len(t))
-		for _, v := range *trip {
-			if d, ok := obtainInfoToSend(accumulator, v); ok {
-				vToSend = append(vToSend, d)
-			}
-		}
-		aq.SendMessage(AccumulatorInfo{
-			Data: vToSend,
-		})
 	}
+}
+
+func processTripData(trip *[]SendableDataTrip, accumulator map[string]sData, aq queue.Sender[AccumulatorInfo]) {
+	if trip == nil {
+		log.Error("trip is nil, no processing is made but something must be checked")
+		return
+	}
+	t := *trip
+	vToSend := make([]AccumulatorData, 0, len(t))
+	for _, v := range *trip {
+		if d, ok := obtainInfoToSend(accumulator, v); ok {
+			vToSend = append(vToSend, d)
+		}
+	}
+	aq.SendMessage(AccumulatorInfo{
+		Data: vToSend,
+	}, "")
 }
 
 func getStationKey(stationCode string, year int) string {
@@ -104,6 +78,10 @@ func main() {
 	utils.FailOnError(err, "missing env value of worker stations")
 	workerTrips, err := strconv.Atoi(os.Getenv("amountTripsWorkers"))
 	utils.FailOnError(err, "missing env value of worker trips")
+	acc := make(map[string]sData)
+	csvReader, err := fileManager.CreateCSVFileManager[JoinerDataStation](transformer{}, "ponemeElNombreLicha.csv")
+	utils.FailOnError(err, "could not load csv file")
+	fillMapWithData(acc, csvReader)
 	inputQueue, _ := queue.InitializeReceiver[JoinerDataStation]("montrealQueue", "rabbit", "", "", nil)
 	inputQueueTrip, _ := queue.InitializeReceiver[JoinerDataStation]("montrealQueueTrip", "rabbit", "", "", nil)
 	aq, _ := queue.InitializeSender[AccumulatorInfo]("calculatorMontreal", amountCalc, nil, "rabbit")
@@ -119,7 +97,6 @@ func main() {
 	st := make(chan struct{}, 1)
 	st <- struct{}{}
 	// catch SIGETRM or SIGINTERRUPT
-	acc := make(map[string]sData)
 	go func() {
 		for {
 			data, msgId, err := inputQueue.ReceiveMessage()
@@ -136,7 +113,8 @@ func main() {
 				utils.FailOnError(err, "Failed while receiving message")
 				continue
 			}
-			processData(data, acc, aq)
+			processData(data, acc)
+			utils.LogError(csvReader.Write(data), "could not write info")
 			utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 			st <- d
 		}
@@ -150,7 +128,7 @@ func main() {
 					c:  tt,
 					nc: st,
 				})
-				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
+				utils.LogError(inputQueueTrip.AckMessage(msgId), "failed while trying ack")
 				continue
 			}
 			d := <-tt
@@ -158,12 +136,23 @@ func main() {
 				utils.FailOnError(err, "Failed while receiving message")
 				continue
 			}
-			processData(data, acc, aq)
-			utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
+			processTripData(data.DataTrip, acc, aq)
+			utils.LogError(inputQueueTrip.AckMessage(msgId), "failed while trying ack")
 			tt <- d
 		}
 	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
 	common.WaitForSigterm(grace)
+}
+
+func fillMapWithData(acc map[string]sData, manager fileManager.Manager[JoinerDataStation]) {
+	for {
+		data, err := manager.ReadLine()
+		if err != nil && errors.Is(err, io.EOF) {
+			break
+		}
+		utils.FailOnError(err, "could not parse line from file")
+		processData(data, acc)
+	}
 }

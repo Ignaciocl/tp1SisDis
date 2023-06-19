@@ -81,7 +81,7 @@ func main() {
 				continue
 			}
 			if err != nil {
-				utils.FailOnError(err, "Failed while receiving message")
+				utils.LogError(err, "Failed while receiving message")
 				inputQueue.RejectMessage(msgId)
 				continue
 			}
@@ -93,7 +93,7 @@ func main() {
 		<-ns
 		qr := QueryResult{Data: acc["random"]}
 
-		accumulatorInfo.SendMessage(qr)
+		accumulatorInfo.SendMessage(qr, "")
 	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")

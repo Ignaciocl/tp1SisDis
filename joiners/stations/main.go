@@ -118,7 +118,7 @@ func processData(data JoinerDataStation, w *mapHolder, aq queue.Sender[PreAccumu
 		aq.SendMessage(PreAccumulatorData{
 			Data: v,
 			Key:  "random",
-		})
+		}, "")
 	}
 }
 
@@ -189,7 +189,7 @@ func main() {
 					c:  tt,
 					nc: st,
 				})
-				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
+				utils.LogError(inputQueueTrip.AckMessage(msgId), "failed while trying ack")
 				continue
 			}
 			p := <-tt
@@ -198,7 +198,7 @@ func main() {
 				continue
 			}
 			processData(data, &w, aq)
-			utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
+			utils.LogError(inputQueueTrip.AckMessage(msgId), "failed while trying ack")
 			tt <- p
 		}
 	}()
