@@ -6,8 +6,13 @@ start-app:
 .PHONY: start-app
 
 stop-app:
-	docker-compose down
+	docker-compose -f docker-compose.yml stop -t 1
 .PHONY: stop-app
+
+delete-app: stop-app
+	docker-compose -f docker-compose.yml down
+	echo "TE ESTAS PORTANDO MAL SERAS CASTIGADO"
+.PHONY: delete-app
 
 make-me-anew:
 	docker-compose up -d --force-recreate

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
+	commonHealthcheck "github.com/Ignaciocl/tp1SisdisCommons/healthcheck"
 	"github.com/Ignaciocl/tp1SisdisCommons/queue"
 	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	"github.com/sirupsen/logrus"
@@ -13,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 )
+
+const serviceName = "server"
 
 // InitConfig Function that uses viper library to parse configuration parameters.
 // Viper is configured to read variables from both environment variables and the
@@ -148,6 +151,12 @@ func main() {
 	}()
 	go receivePolling(clientAcc, dq)
 	go receiveData(client, eofStarter, sender)
+
+	healthCheckHandler := commonHealthcheck.InitHealthChecker(serviceName)
+	go func() {
+		err := healthCheckHandler.Run()
+		log.Errorf("healtchecker error: %v", err)
+	}()
 	common.WaitForSigterm(grace)
 }
 
