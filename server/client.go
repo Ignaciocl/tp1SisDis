@@ -1,5 +1,6 @@
 package main
 
+/*
 import (
 	"fmt"
 	log "github.com/sirupsen/logrus"
@@ -129,3 +130,5 @@ func (c *Client) ReceiveData() ([]byte, error) {
 	finalData := total[0:realN]
 	return finalData, nil
 }
+
+*/
