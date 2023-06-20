@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
+	commonHealthcheck "github.com/Ignaciocl/tp1SisdisCommons/healthcheck"
 	"github.com/Ignaciocl/tp1SisdisCommons/queue"
 	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	"github.com/pkg/errors"
@@ -10,6 +11,8 @@ import (
 	"os"
 	"strconv"
 )
+
+const serviceName = "joiner-stations"
 
 type ReceivableDataStation struct {
 	Code string `json:"code"`
@@ -202,6 +205,13 @@ func main() {
 			tt <- p
 		}
 	}()
+
+	healthCheckHandler := commonHealthcheck.InitHealthChecker(serviceName)
+	go func() {
+		err := healthCheckHandler.Run()
+		log.Errorf("healtchecker error: %v", err)
+	}()
+
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
 	common.WaitForSigterm(grace)
 }

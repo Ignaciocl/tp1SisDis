@@ -4,6 +4,7 @@ import (
 	"fmt"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
 	"github.com/Ignaciocl/tp1SisdisCommons/fileManager"
+	commonHealthcheck "github.com/Ignaciocl/tp1SisdisCommons/healthcheck"
 	"github.com/Ignaciocl/tp1SisdisCommons/queue"
 	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	"github.com/pkg/errors"
@@ -12,6 +13,8 @@ import (
 	"os"
 	"strconv"
 )
+
+const serviceName = "joiner-montreal"
 
 type AccumulatorInfo struct {
 	Data []AccumulatorData `json:"data"`
@@ -140,6 +143,12 @@ func main() {
 			utils.LogError(inputQueueTrip.AckMessage(msgId), "failed while trying ack")
 			tt <- d
 		}
+	}()
+
+	healthCheckHandler := commonHealthcheck.InitHealthChecker(serviceName)
+	go func() {
+		err := healthCheckHandler.Run()
+		log.Errorf("healtchecker error: %v", err)
 	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")

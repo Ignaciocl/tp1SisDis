@@ -2,6 +2,7 @@ package main
 
 import (
 	common "github.com/Ignaciocl/tp1SisdisCommons"
+	commonHealthcheck "github.com/Ignaciocl/tp1SisdisCommons/healthcheck"
 	"github.com/Ignaciocl/tp1SisdisCommons/queue"
 	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	"log"
@@ -11,7 +12,10 @@ import (
 	"time"
 )
 
-const dateLayout = "2006-01-02"
+const (
+	serviceName = "worker-weather"
+	dateLayout  = "2006-01-02"
+)
 
 func getDate(date string) string {
 	d, err := time.Parse(dateLayout, date)
@@ -99,6 +103,12 @@ func main() {
 			processData(data, outputQueueWeather)
 			inputQueue.AckMessage(msgId)
 		}
+	}()
+
+	healthCheckHandler := commonHealthcheck.InitHealthChecker(serviceName + id)
+	go func() {
+		err := healthCheckHandler.Run()
+		log.Printf("healtchecker error: %v", err)
 	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")

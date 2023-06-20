@@ -2,12 +2,15 @@ package main
 
 import (
 	common "github.com/Ignaciocl/tp1SisdisCommons"
+	commonHealthcheck "github.com/Ignaciocl/tp1SisdisCommons/healthcheck"
 	"github.com/Ignaciocl/tp1SisdisCommons/queue"
 	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	"log"
 	"os"
 	"strconv"
 )
+
+const serviceName = "joiner-weather"
 
 type ReceivableDataWeather struct {
 	Date string `json:"date"`
@@ -188,6 +191,12 @@ func main() {
 		}
 		aq.SendMessage(eof, "")
 		weatherTurn <- struct{}{}
+	}()
+
+	healthCheckHandler := commonHealthcheck.InitHealthChecker(serviceName)
+	go func() {
+		err := healthCheckHandler.Run()
+		log.Printf("healtchecker error: %v", err)
 	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")

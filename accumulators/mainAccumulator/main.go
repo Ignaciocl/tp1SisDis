@@ -2,10 +2,13 @@ package main
 
 import (
 	common "github.com/Ignaciocl/tp1SisdisCommons"
+	commonHealthcheck "github.com/Ignaciocl/tp1SisdisCommons/healthcheck"
 	"github.com/Ignaciocl/tp1SisdisCommons/queue"
 	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	log "github.com/sirupsen/logrus"
 )
+
+const serviceName = "accumulator-main"
 
 type Accumulator struct {
 	Stations    []string `json:"stations,omitempty"`
@@ -94,6 +97,12 @@ func main() {
 		qr := QueryResult{Data: acc["random"]}
 
 		accumulatorInfo.SendMessage(qr, "")
+	}()
+
+	healthCheckHandler := commonHealthcheck.InitHealthChecker(serviceName)
+	go func() {
+		err := healthCheckHandler.Run()
+		log.Errorf("healtchecker error: %v", err)
 	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")

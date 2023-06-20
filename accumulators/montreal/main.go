@@ -2,12 +2,15 @@ package main
 
 import (
 	common "github.com/Ignaciocl/tp1SisdisCommons"
+	commonHealthcheck "github.com/Ignaciocl/tp1SisdisCommons/healthcheck"
 	"github.com/Ignaciocl/tp1SisdisCommons/queue"
 	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	log "github.com/sirupsen/logrus"
 	"os"
 	"strconv"
 )
+
+const serviceName = "accumulator-montreal"
 
 type dStation struct {
 	counter         float64
@@ -109,6 +112,12 @@ func main() {
 		}
 		_ = outputQueue.SendMessage(Accumulator{Stations: v, Key: "random"}, "") // do graceful shutdown
 		_ = outputQueue.SendMessage(Accumulator{EofData: d}, "")
+	}()
+
+	healthCheckHandler := commonHealthcheck.InitHealthChecker(serviceName)
+	go func() {
+		err := healthCheckHandler.Run()
+		log.Errorf("healtchecker error: %v", err)
 	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")

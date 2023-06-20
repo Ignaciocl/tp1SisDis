@@ -2,12 +2,15 @@ package main
 
 import (
 	common "github.com/Ignaciocl/tp1SisdisCommons"
+	commonHealthcheck "github.com/Ignaciocl/tp1SisdisCommons/healthcheck"
 	"github.com/Ignaciocl/tp1SisdisCommons/queue"
 	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	log "github.com/sirupsen/logrus"
 	"os"
 	"strings"
 )
+
+const serviceName = "distributor"
 
 type receivedData struct {
 	File string        `json:"file"`
@@ -111,5 +114,12 @@ func main() {
 			utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 		}
 	}()
+
+	healthCheckHandler := commonHealthcheck.InitHealthChecker(serviceName + id)
+	go func() {
+		err := healthCheckHandler.Run()
+		log.Errorf("healtchecker error: %v", err)
+	}()
+
 	common.WaitForSigterm(grace)
 }

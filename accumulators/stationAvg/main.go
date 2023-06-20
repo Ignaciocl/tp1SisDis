@@ -1,10 +1,14 @@
 package main
 
 import (
+	"fmt"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
+	commonHealthcheck "github.com/Ignaciocl/tp1SisdisCommons/healthcheck"
 	"github.com/Ignaciocl/tp1SisdisCommons/queue"
 	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 )
+
+const serviceName = "accumulator-stations"
 
 type ReceivableDataStation struct {
 	Name string `json:"name"`
@@ -135,6 +139,12 @@ func main() {
 		}
 		aq.SendMessage(eof, "")
 		st <- struct{}{}
+	}()
+
+	healthCheckHandler := commonHealthcheck.InitHealthChecker(serviceName)
+	go func() {
+		err := healthCheckHandler.Run()
+		fmt.Printf("healtchecker error: %v", err)
 	}()
 
 	common.WaitForSigterm(grace)

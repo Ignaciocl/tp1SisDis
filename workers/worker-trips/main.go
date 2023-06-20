@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
+	commonHealthcheck "github.com/Ignaciocl/tp1SisdisCommons/healthcheck"
 	"github.com/Ignaciocl/tp1SisdisCommons/queue"
 	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	"log"
@@ -9,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 )
+
+const serviceName = "worker-trip"
 
 func getDate(date string) string {
 	return strings.Split(date, " ")[0]
@@ -162,6 +166,13 @@ func main() {
 			processData(data, outputQueueMontreal, outputQueueStations, outputQueueWeather)
 			utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 		}
+	}()
+
+	healthCheckHandler := commonHealthcheck.InitHealthChecker(serviceName + id)
+	go func() {
+		err := healthCheckHandler.Run()
+		fmt.Printf("healthchecker error: %v", err)
+		//log.Errorf("healtchecker error: %v", err) Add logger
 	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
