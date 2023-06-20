@@ -58,26 +58,26 @@ func (s *Server) Run() error {
 	senderConfig := s.config.Sender
 	sender, err := queue.InitializeSender[dataentities.DataToSend](senderConfig.Consumer, senderConfig.AmountOfDistributors, nil, s.config.ConnectionString)
 	if err != nil {
-		return fmt.Errorf("%v", err)
+		return fmt.Errorf("%w: %v", errInitializingSender, err)
 	}
 	defer closeService(sender)
 
 	eofStarter, err := common.CreatePublisher(s.config.ConnectionString, sender)
 	if err != nil {
-		return fmt.Errorf("%v", err)
+		return fmt.Errorf("%w: %v", errCreatingPublisher, err)
 	}
 	defer eofStarter.Close()
 
 	receiverConfig := s.config.Receiver
 	accumulatorInfo, err := queue.InitializeReceiver[dataentities.AccumulatorData](receiverConfig.Queue, s.config.ConnectionString, receiverConfig.RoutingKey, receiverConfig.Topic, sender)
 	if err != nil {
-		return fmt.Errorf("%v", err)
+		return fmt.Errorf("%w: %v", errInitializingReceiver, err)
 	}
 	defer closeService(accumulatorInfo)
 
 	gracefulManager, err := common.CreateGracefulManager(s.config.ConnectionString)
 	if err != nil {
-		return fmt.Errorf("%v", err)
+		return fmt.Errorf("%w: %v", errInitializingGracefulManager, err)
 	}
 	defer gracefulManager.Close()
 	defer common.RecoverFromPanic(gracefulManager, "")
@@ -95,7 +95,7 @@ func (s *Server) Run() error {
 	go func() {
 		result, id, err := accumulatorInfo.ReceiveMessage()
 		if err != nil {
-			log.Errorf("%v", err)
+			log.Errorf("%s: %v", errReceivingData, err)
 			return
 		}
 
