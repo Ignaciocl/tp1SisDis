@@ -2,45 +2,15 @@ package main
 
 import (
 	common "github.com/Ignaciocl/tp1SisdisCommons"
+	"github.com/Ignaciocl/tp1SisdisCommons/fileManager"
 	"github.com/Ignaciocl/tp1SisdisCommons/queue"
 	"github.com/Ignaciocl/tp1SisdisCommons/utils"
-	"log"
+	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
+	"io"
 	"os"
 	"strconv"
 )
-
-type ReceivableDataWeather struct {
-	Date string `json:"date"`
-}
-
-type ReceivableDataTrip struct {
-	Date     string `json:"date"`
-	Duration int    `json:"duration"`
-}
-
-type JoinerDataStation struct {
-	DataWeather *ReceivableDataWeather `json:"weatherData,omitempty"`
-	DataTrip    *[]ReceivableDataTrip  `json:"tripData,omitempty"`
-	Name        string                 `json:"name"`
-	Key         string                 `json:"key"`
-	common.EofData
-}
-
-type AccumulatorData struct {
-	Dur float64 `json:"duration"`
-	Key string  `json:"key"`
-	common.EofData
-}
-
-type preAccumulatorData struct {
-	DurGathered int
-	Amount      int
-}
-
-type weatherDuration struct {
-	total    int
-	duration int
-}
 
 func (sd *weatherDuration) add(duration int) {
 	sd.total += 1
@@ -83,6 +53,18 @@ func main() {
 	utils.FailOnError(err, "missing env value of worker stations")
 	workerTrips, err := strconv.Atoi(os.Getenv("amountTripsWorkers"))
 	utils.FailOnError(err, "missing env value of worker trips")
+	csvReader, err := fileManager.CreateCSVFileManager[JoinerDataStation](transformer{}, "ponemeElNombreLicha.csv")
+	utils.FailOnError(err, "could not load csv file")
+	acc := make(map[string]weatherDuration)
+	tripTurn := make(chan struct{}, 1)
+	weatherTurn := make(chan struct{}, 1)
+	ns := make(chan struct{}, 1)
+	weatherTurn <- struct{}{}
+	fillMapWithData(acc, csvReader, actionable{
+		c:  weatherTurn,
+		nc: tripTurn,
+	}, workerWeather)
+	log.Info("data filled with info previously set")
 	connection, _ := queue.InitializeConnectionRabbit(nil, "rabbit")
 	inputQueue, _ := queue.InitializeReceiver[JoinerDataStation]("weatherQueue", "", "", "", connection)
 	inputTrips, _ := queue.InitializeReceiver[JoinerDataStation]("weatherQueueTrip", "", "", "", connection)
@@ -97,14 +79,10 @@ func main() {
 	defer inputQueue.Close()
 	defer aq.Close()
 	defer inputTrips.Close()
-	tripTurn := make(chan struct{}, 1)
-	weatherTurn := make(chan struct{}, 1)
-	ns := make(chan struct{}, 1)
-	weatherTurn <- struct{}{}
-	acc := make(map[string]weatherDuration)
 	go func() {
 		for {
 			data, id, err := inputQueue.ReceiveMessage()
+			utils.LogError(csvReader.Write(data), "could not write info")
 			if data.EOF {
 				wqEOF.AnswerEofOk(data.IdempotencyKey, actionable{
 					c:  weatherTurn,
@@ -192,4 +170,23 @@ func main() {
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
 	common.WaitForSigterm(grace)
+}
+
+func fillMapWithData(acc map[string]weatherDuration, manager fileManager.Manager[JoinerDataStation], a actionable, maxAmountToContinue int) {
+	counter := 0
+	for {
+		data, err := manager.ReadLine()
+		if err != nil && errors.Is(err, io.EOF) {
+			break
+		}
+		utils.FailOnError(err, "could not parse line from file")
+		if data.EOF {
+			counter += 1
+			if maxAmountToContinue <= counter {
+				a.DoActionIfEOF()
+			}
+			continue
+		}
+		processData(data, acc)
+	}
 }

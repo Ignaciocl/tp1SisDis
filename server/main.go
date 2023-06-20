@@ -71,9 +71,10 @@ type fileData struct {
 }
 
 type dataToSend struct {
-	File string        `json:"file,omitempty"`
-	Data []interface{} `json:"data,omitempty"`
-	City string        `json:"city,omitempty"`
+	File           string        `json:"file,omitempty"`
+	Data           []interface{} `json:"data,omitempty"`
+	City           string        `json:"city,omitempty"`
+	IdempotencyKey string        `json:"idempotencyKey"`
 }
 
 type dataQuery struct {
@@ -185,9 +186,10 @@ func receiveData(client *Client, eofStarter common.Publisher, queue queue.Sender
 		}
 
 		err := queue.SendMessage(dataToSend{
-			File: data.File,
-			Data: data.Data,
-			City: city,
+			File:           data.File,
+			Data:           data.Data,
+			City:           city,
+			IdempotencyKey: "puto el que lee",
 		}, "")
 		if err != nil {
 			log.Errorf("error happened: %v", err)

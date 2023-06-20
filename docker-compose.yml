@@ -118,6 +118,9 @@ services:
     - calculators=3
     - amountStationsWorkers=3
     - amountTripsWorkers=3
+    volumes:
+      - './joiners/montreal/main.go:/app/main.go'
+      - './joiners/montreal/dto.go:/app/main.go'
     networks:
     - bikers
   joiner-stations:

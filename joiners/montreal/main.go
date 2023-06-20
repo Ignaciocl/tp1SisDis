@@ -81,7 +81,14 @@ func main() {
 	acc := make(map[string]sData)
 	csvReader, err := fileManager.CreateCSVFileManager[JoinerDataStation](transformer{}, "ponemeElNombreLicha.csv")
 	utils.FailOnError(err, "could not load csv file")
-	fillMapWithData(acc, csvReader)
+	tt := make(chan struct{}, 1)
+	st := make(chan struct{}, 1)
+	st <- struct{}{}
+	fillMapWithData(acc, csvReader, actionable{
+		c:  st,
+		nc: tt,
+	}, workerStation)
+	log.Info("data filled with info previously set")
 	inputQueue, _ := queue.InitializeReceiver[JoinerDataStation]("montrealQueue", "rabbit", "", "", nil)
 	inputQueueTrip, _ := queue.InitializeReceiver[JoinerDataStation]("montrealQueueTrip", "rabbit", "", "", nil)
 	aq, _ := queue.InitializeSender[AccumulatorInfo]("calculatorMontreal", amountCalc, nil, "rabbit")
@@ -93,13 +100,10 @@ func main() {
 	defer inputQueue.Close()
 	defer aq.Close()
 	defer inputQueueTrip.Close()
-	tt := make(chan struct{}, 1)
-	st := make(chan struct{}, 1)
-	st <- struct{}{}
-	// catch SIGETRM or SIGINTERRUPT
 	go func() {
 		for {
 			data, msgId, err := inputQueue.ReceiveMessage()
+			utils.LogError(csvReader.Write(data), "could not write info")
 			if data.EOF {
 				sfe.AnswerEofOk(data.IdempotencyKey, actionable{
 					c:  st,
@@ -108,13 +112,12 @@ func main() {
 				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 				continue
 			}
-			d := <-st
 			if err != nil {
 				utils.FailOnError(err, "Failed while receiving message")
 				continue
 			}
+			d := <-st
 			processData(data, acc)
-			utils.LogError(csvReader.Write(data), "could not write info")
 			utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 			st <- d
 		}
@@ -131,11 +134,11 @@ func main() {
 				utils.LogError(inputQueueTrip.AckMessage(msgId), "failed while trying ack")
 				continue
 			}
-			d := <-tt
 			if err != nil {
 				utils.FailOnError(err, "Failed while receiving message")
 				continue
 			}
+			d := <-tt
 			processTripData(data.DataTrip, acc, aq)
 			utils.LogError(inputQueueTrip.AckMessage(msgId), "failed while trying ack")
 			tt <- d
@@ -146,13 +149,21 @@ func main() {
 	common.WaitForSigterm(grace)
 }
 
-func fillMapWithData(acc map[string]sData, manager fileManager.Manager[JoinerDataStation]) {
+func fillMapWithData(acc map[string]sData, manager fileManager.Manager[JoinerDataStation], a actionable, maxAmountToContinue int) {
+	counter := 0
 	for {
 		data, err := manager.ReadLine()
 		if err != nil && errors.Is(err, io.EOF) {
 			break
 		}
 		utils.FailOnError(err, "could not parse line from file")
+		if data.EOF {
+			counter += 1
+			if maxAmountToContinue <= counter {
+				a.DoActionIfEOF()
+			}
+			continue
+		}
 		processData(data, acc)
 	}
 }
