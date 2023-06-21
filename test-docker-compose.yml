@@ -24,7 +24,7 @@ services:
       rabbit:
         condition: service_healthy
     environment:
-      - distributors=3
+      - LOG_LEVEL=DEBUG
     networks:
       - bikers
     ports:

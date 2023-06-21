@@ -6,30 +6,30 @@ healthcheck_response: 'seras castigada'
 max_retries: 5
 retry_delay: 1s
 interval: 5s
-max_connection_retries: 10
-connection_retry_delay: 1s
+max_connection_retries: 15
+connection_retry_delay: 2s
 ttl: 5
 
 services:
   - 'server'
-#  - 'accumulatorMain'
-#  - 'accumulatorMontreal'
-#  - 'accumulatorStationAvg'
-#  - 'calculator1'
-#  - 'calculator2'
-#  - 'calculator3'
-#  - 'distributor1'
-#  - 'distributor2'
-#  - 'distributor3'
-#  - 'joinerMontreal'
-#  - 'joinerStation'
-#  - 'joinerWeather'
-#  - 'worker-station1'
-#  - 'worker-station2'
-#  - 'worker-station3'
-#  - 'worker-trip1'
-#  - 'worker-trip2'
-#  - 'worker-trip3'
-#  - 'worker-weather1'
-#  - 'worker-weather2'
-#  - 'worker-weather3'
+  - 'accumulator-main'
+  - 'accumulator-montreal'
+  - 'accumulator-stations'
+  - 'calculator1'
+  - 'calculator2'
+  - 'calculator3'
+  - 'distributor1'
+  - 'distributor2'
+  - 'distributor3'
+  - 'joiner-montreal'
+  - 'joiner-stations'
+  - 'joiner-weather'
+  - 'worker-station1'
+  - 'worker-station2'
+  - 'worker-station3'
+  - 'worker-trip1'
+  - 'worker-trip2'
+  - 'worker-trip3'
+  - 'worker-weather1'
+  - 'worker-weather2'
+  - 'worker-weather3'

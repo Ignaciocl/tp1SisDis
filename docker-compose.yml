@@ -5,7 +5,7 @@ services:
   accumulator-main:
     build:
       context: ./accumulators/mainAccumulator
-    container_name: accumulatorMain
+    container_name: accumulator-main
     depends_on:
       rabbit:
         condition: service_healthy
@@ -16,7 +16,7 @@ services:
   accumulator-montreal:
     build:
       context: ./accumulators/montreal
-    container_name: accumulatorMontreal
+    container_name: accumulator-montreal
     depends_on:
       rabbit:
         condition: service_healthy
@@ -27,7 +27,7 @@ services:
   accumulator-stations:
     build:
       context: ./accumulators/stationAvg
-    container_name: accumulatorStationAvg
+    container_name: accumulator-stations
     depends_on:
       rabbit:
         condition: service_healthy
@@ -104,7 +104,7 @@ services:
   joiner-montreal:
     build:
       context: ./joiners/montreal
-    container_name: joinerMontreal
+    container_name: joiner-montreal
     depends_on:
       rabbit:
         condition: service_healthy
@@ -117,7 +117,7 @@ services:
   joiner-stations:
     build:
       context: ./joiners/stations
-    container_name: joinerStation
+    container_name: joiner-stations
     depends_on:
       rabbit:
         condition: service_healthy
@@ -129,7 +129,7 @@ services:
   joiner-weather:
     build:
       context: ./joiners/weather
-    container_name: joinerWeather
+    container_name: joiner-weather
     depends_on:
       rabbit:
         condition: service_healthy
@@ -159,7 +159,7 @@ services:
       rabbit:
         condition: service_healthy
     environment:
-      - distributors=3
+      - LOG_LEVEL=DEBUG
     networks:
       - bikers
     ports:
