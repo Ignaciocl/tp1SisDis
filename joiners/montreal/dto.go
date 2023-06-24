@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-const Sep = "/"
+const Sep = "/-my pretty separator-/"
 
 type SendableDataStation struct {
 	Code      string `json:"code"`
@@ -48,25 +48,30 @@ type transformer struct {
 
 func (t transformer) ToWritable(data JoinerDataStation) []string {
 	s := data.DataStation
+	if data.EOF {
+		return []string{data.Key, data.IdempotencyKey, strconv.FormatBool(data.EOF), ""}
+	}
 	stationData := []string{s.Name, s.Code, s.Longitude, s.Latitude, strconv.Itoa(s.Year)}
 	return []string{data.Key, data.IdempotencyKey, strconv.FormatBool(data.EOF), strings.Join(stationData, Sep)}
 }
 
 func (t transformer) FromWritable(d []string) JoinerDataStation {
-	s := strings.Split(d[3], Sep)
-	year, _ := strconv.Atoi(s[4])
 	eof, _ := strconv.ParseBool(d[2])
 	r := JoinerDataStation{
 		Key: d[0],
 	}
 	r.EOF = eof
-	r.IdempotencyKey = s[1]
-	r.DataStation = &SendableDataStation{
-		Code:      s[1],
-		Name:      s[0],
-		Latitude:  s[3],
-		Longitude: s[2],
-		Year:      year,
+	r.IdempotencyKey = d[1]
+	if !eof {
+		s := strings.Split(d[3], Sep)
+		year, _ := strconv.Atoi(s[4])
+		r.DataStation = &SendableDataStation{
+			Code:      s[1],
+			Name:      s[0],
+			Latitude:  s[3],
+			Longitude: s[2],
+			Year:      year,
+		}
 	}
 	return r
 }

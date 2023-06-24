@@ -4,55 +4,17 @@ import (
 	"fmt"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
 	commonHealthcheck "github.com/Ignaciocl/tp1SisdisCommons/healthcheck"
+	"github.com/Ignaciocl/tp1SisdisCommons/fileManager"
 	"github.com/Ignaciocl/tp1SisdisCommons/queue"
 	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+	"io"
 	"os"
 	"strconv"
 )
 
 const serviceName = "joiner-stations"
-
-type ReceivableDataStation struct {
-	Code string `json:"code"`
-	Name string `json:"name"`
-	Year int    `json:"year"`
-}
-
-type ReceivableDataTrip struct {
-	Station string `json:"station"`
-	Year    int    `json:"year"`
-}
-
-type JoinerDataStation struct {
-	DataStation *ReceivableDataStation `json:"stationData,omitempty"`
-	DataTrip    *[]ReceivableDataTrip  `json:"tripData,omitempty"`
-	Name        string                 `json:"name"`
-	Key         string                 `json:"key"`
-	City        string                 `json:"city"`
-	common.EofData
-}
-
-type senderDataStation struct {
-	Name string `json:"name"`
-	Year int    `json:"year"`
-}
-
-type PreAccumulatorData struct {
-	Data []senderDataStation `json:"data"`
-	Key  string              `json:"key"`
-	common.EofData
-}
-
-type stationData struct {
-	name string
-}
-
-type stationAlive struct {
-	wasAliveOn17 bool
-	wasAliveOn16 bool
-}
 
 func (s *stationAlive) shouldBeConsidered() bool {
 	return s.wasAliveOn16 && s.wasAliveOn17
@@ -83,7 +45,7 @@ func getStationData(key string, city string, year int, accumulator map[string]st
 	return data, err
 }
 
-func processData(data JoinerDataStation, w *mapHolder, aq queue.Sender[PreAccumulatorData]) {
+func processData(data JoinerDataStation, w *mapHolder) {
 	accumulator := w.m
 	alive := w.stationToYear
 	city := data.City
@@ -103,7 +65,13 @@ func processData(data JoinerDataStation, w *mapHolder, aq queue.Sender[PreAccumu
 		sa.setAliveForYear(station.Year)
 		alive[station.Name] = sa
 
-	} else if trips := data.DataTrip; trips != nil {
+	}
+}
+
+func processDataTrips(data JoinerDataStation, w *mapHolder, aq queue.Sender[PreAccumulatorData]) {
+	accumulator := w.m
+	alive := w.stationToYear
+	if trips := data.DataTrip; trips != nil {
 		v := make([]senderDataStation, 0, len(*trips))
 		for _, trip := range *trips {
 			dStation, err := getStationData(trip.Station, data.City, trip.Year, accumulator)
@@ -143,6 +111,19 @@ func main() {
 	utils.FailOnError(err, "missing env value of worker stations")
 	workerTrips, err := strconv.Atoi(os.Getenv("amountTripsWorkers"))
 	utils.FailOnError(err, "missing env value of worker trips")
+	csvReader, err := fileManager.CreateCSVFileManager[JoinerDataStation](transformer{}, "ponemeElNombreLicha.csv")
+	utils.FailOnError(err, "could not load csv file")
+	acc := map[string]stationData{}
+	tt := make(chan struct{}, 1)
+	st := make(chan struct{}, 1)
+	st <- struct{}{}
+	aliveStations := map[string]stationAlive{}
+	w := mapHolder{m: acc, stationToYear: aliveStations}
+	fillMapWithData(&w, csvReader, actionable{
+		c:  st,
+		nc: tt,
+	}, workerStation)
+	log.Info("data filled with info previously set")
 	inputQueue, _ := queue.InitializeReceiver[JoinerDataStation]("stationsQueue", "rabbit", "", "", nil)
 	inputQueueTrip, _ := queue.InitializeReceiver[JoinerDataStation]("stationsQueueTrip", "rabbit", "", "", nil)
 	aq, _ := queue.InitializeSender[PreAccumulatorData]("preAccumulatorSt", 0, nil, "rabbit")
@@ -155,17 +136,11 @@ func main() {
 	defer tfe.Close()
 	defer inputQueue.Close()
 	defer aq.Close()
-	tt := make(chan struct{}, 1)
-	st := make(chan struct{}, 1)
-	st <- struct{}{}
-	acc := map[string]stationData{}
-	aliveStations := map[string]stationAlive{}
-	w := mapHolder{m: acc, stationToYear: aliveStations}
 	go func() {
 		for {
 			data, msgId, err := inputQueue.ReceiveMessage()
+			utils.LogError(csvReader.Write(data), "could not write info")
 			if data.EOF {
-
 				sfe.AnswerEofOk(data.IdempotencyKey, actionable{
 					c:  st,
 					nc: tt,
@@ -178,7 +153,7 @@ func main() {
 				utils.FailOnError(err, "Failed while receiving message")
 				continue
 			}
-			processData(data, &w, aq)
+			processData(data, &w)
 			utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 			st <- p
 		}
@@ -200,7 +175,7 @@ func main() {
 				utils.FailOnError(err, "Failed while receiving message")
 				continue
 			}
-			processData(data, &w, aq)
+			processDataTrips(data, &w, aq)
 			utils.LogError(inputQueueTrip.AckMessage(msgId), "failed while trying ack")
 			tt <- p
 		}
@@ -214,4 +189,23 @@ func main() {
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
 	common.WaitForSigterm(grace)
+}
+
+func fillMapWithData(acc *mapHolder, manager fileManager.Manager[JoinerDataStation], a actionable, maxAmountToContinue int) {
+	counter := 0
+	for {
+		data, err := manager.ReadLine()
+		if err != nil && errors.Is(err, io.EOF) {
+			break
+		}
+		utils.FailOnError(err, "could not parse line from file")
+		if data.EOF {
+			counter += 1
+			if maxAmountToContinue <= counter {
+				a.DoActionIfEOF()
+			}
+			continue
+		}
+		processData(data, acc)
+	}
 }
