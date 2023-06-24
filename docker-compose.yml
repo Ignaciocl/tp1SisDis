@@ -290,3 +290,15 @@ services:
     - distributors=3
     networks:
     - bikers
+
+  diosito:
+    build:
+      context: ./healthchecker/
+    container_name: diosito
+    depends_on:
+      - server
+    networks:
+      - bikers
+    volumes:
+      - './healthchecker/main.go:/app/main.go'
+      - '/var/run/docker.sock:/var/run/docker.sock'
