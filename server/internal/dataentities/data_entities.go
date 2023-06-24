@@ -9,9 +9,10 @@ type FileData struct {
 }
 
 type DataToSend struct {
-	File string        `json:"file,omitempty"`
-	Data []interface{} `json:"data,omitempty"`
-	City string        `json:"city,omitempty"`
+	File           string        `json:"file,omitempty"`
+	Data           []interface{} `json:"data,omitempty"`
+	City           string        `json:"city,omitempty"`
+	IdempotencyKey string        `json:"idempotencyKey"`
 }
 
 type AccumulatorData struct {

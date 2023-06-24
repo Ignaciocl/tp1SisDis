@@ -185,9 +185,10 @@ func (s *Server) receiveData(client client.Client, eofStarter common.Publisher, 
 		}
 
 		err = queue.SendMessage(dataentities.DataToSend{
-			File: data.File,
-			Data: data.Data,
-			City: city,
+			File:           data.File,
+			Data:           data.Data,
+			City:           city,
+			IdempotencyKey: "fakeIdempotencyKey", // ToDo: replace with the correct idempotency key. Licha
 		}, "")
 
 		if err != nil {
