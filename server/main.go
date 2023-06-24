@@ -152,7 +152,7 @@ func main() {
 	go receivePolling(clientAcc, dq)
 	go receiveData(client, eofStarter, sender)
 
-	healthCheckHandler := commonHealthcheck.InitHealthChecker(serviceName)
+	healthCheckHandler := commonHealthcheck.InitHealthCheckerReplier(serviceName)
 	go func() {
 		err := healthCheckHandler.Run()
 		log.Errorf("healtchecker error: %v", err)
@@ -177,7 +177,7 @@ func receiveData(client *Client, eofStarter common.Publisher, queue queue.Sender
 		if data.EOF != nil && *data.EOF {
 			d, _ := json.Marshal(common.EofData{
 				EOF:            true,
-				IdempotencyKey: fmt.Sprintf("%s-%s", city, data.File),
+				IdempotencyKey: fmt.Sprintf("%s-%s-1", city, data.File),
 			})
 			log.Infof("eof received from client, to propagate: %v", string(d))
 			eofStarter.Publish("distributor", d, "eof", "topic")
@@ -198,7 +198,7 @@ func receiveData(client *Client, eofStarter common.Publisher, queue queue.Sender
 			File:           data.File,
 			Data:           data.Data,
 			City:           city,
-			IdempotencyKey: "puto el que lee",
+			IdempotencyKey: "1",
 		}, "")
 		if err != nil {
 			log.Errorf("error happened: %v", err)

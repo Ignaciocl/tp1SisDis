@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
 	"github.com/Ignaciocl/tp1SisdisCommons/queue"
 	"github.com/Ignaciocl/tp1SisdisCommons/utils"
@@ -20,26 +21,28 @@ type SendableData struct {
 	City string      `json:"city"`
 	Data interface{} `json:"data,omitempty"` // Why would i decompress here? it is just a distributor
 	Key  string      `json:"key"`
-	EOF  bool        `json:"EOF"`
+	common.EofData
 }
 
 type SendableDataTrip struct {
 	City string        `json:"city"`
 	Data []interface{} `json:"data,omitempty"` // Why would i decompress here? it is just a distributor
 	Key  string        `json:"key"`
-	EOF  bool          `json:"EOF"`
+	common.EofData
 }
 
-func SendMessagesToQueue(data []interface{}, queue queue.Sender[SendableData], city string) {
-	for _, v := range data {
-		err := queue.SendMessage(SendableData{
+func SendMessagesToQueue(data []interface{}, queue queue.Sender[SendableData], city, ik string) {
+	for i, v := range data {
+		d := SendableData{
 			City: city,
 			Data: v,
-			Key:  "random",
-			EOF:  false,
-		}, "")
+			Key:  "1",
+		}
+		d.EOF = false
+		d.IdempotencyKey = fmt.Sprintf("%s-%d", ik, i)
+		err := queue.SendMessage(d, "")
 		if err != nil {
-
+			log.Errorf("error while sending a message to next step")
 		}
 	}
 }
@@ -61,6 +64,7 @@ func main() {
 	defer wq.Close()
 	defer tq.Close()
 	defer sq.Close()
+	counter := 0
 	// catch SIGETRM or SIGINTERRUPT
 	go func() {
 		pFile := ""
@@ -98,16 +102,19 @@ func main() {
 				}
 			}
 			if pFile == "trips" {
-				tq.SendMessage(SendableDataTrip{
+				d := SendableDataTrip{
 					City: data.City,
 					Data: data.Data,
-					Key:  "random",
-					EOF:  false,
-				}, "")
+					Key:  "1",
+				}
+				d.EOF = false
+				d.IdempotencyKey = fmt.Sprintf("%s-%d", data.IdempotencyKey, counter)
+				counter += 1
+				tq.SendMessage(d, "")
 				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 				continue
 			}
-			SendMessagesToQueue(data.Data, sender, data.City)
+			SendMessagesToQueue(data.Data, sender, data.City, data.IdempotencyKey)
 			utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 		}
 	}()

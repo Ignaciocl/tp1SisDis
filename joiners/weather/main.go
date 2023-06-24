@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
 )
 
 func (sd *weatherDuration) add(duration int) {
@@ -39,12 +40,37 @@ func processData(data JoinerDataStation, accumulator map[string]weatherDuration)
 	}
 }
 
+func getTripsToSend(data JoinerDataStation, accumulator map[string]weatherDuration) WeatherDuration {
+	toSend := WeatherDuration{
+		Total:    0,
+		Duration: 0,
+	}
+	if data.DataTrip == nil { // Border case that should never happen
+		utils.LogError(errors.New("trip is empty"), "trips should not be empty")
+		return toSend
+	}
+	for _, v := range *data.DataTrip {
+		if _, ok := accumulator[v.Date]; !ok {
+			continue
+		}
+		toSend.Total += 1
+		toSend.Duration += v.Duration
+	}
+	return toSend
+}
+
 type actionable struct {
 	c  chan struct{}
 	nc chan struct{}
+	m  map[string]weatherDuration
 }
 
 func (a actionable) DoActionIfEOF() {
+	if a.m != nil {
+		for k := range a.m {
+			delete(a.m, k)
+		}
+	}
 	a.nc <- <-a.c // continue the loop
 }
 
@@ -58,19 +84,19 @@ func main() {
 	acc := make(map[string]weatherDuration)
 	tripTurn := make(chan struct{}, 1)
 	weatherTurn := make(chan struct{}, 1)
-	ns := make(chan struct{}, 1)
 	weatherTurn <- struct{}{}
 	fillMapWithData(acc, csvReader, actionable{
 		c:  weatherTurn,
 		nc: tripTurn,
 	}, workerWeather)
 	log.Info("data filled with info previously set")
+	id := os.Getenv("id")
 	connection, _ := queue.InitializeConnectionRabbit(nil, "rabbit")
-	inputQueue, _ := queue.InitializeReceiver[JoinerDataStation]("weatherQueue", "", "", "", connection)
-	inputTrips, _ := queue.InitializeReceiver[JoinerDataStation]("weatherQueueTrip", "", "", "", connection)
-	aq, _ := queue.InitializeSender[AccumulatorData]("accumulator", 0, connection, "")
+	inputQueue, _ := queue.InitializeReceiver[JoinerDataStation]("weatherQueue", "", id, "", connection)
+	inputTrips, _ := queue.InitializeReceiver[JoinerDataStation]("weatherQueueTrip", "", id, "", connection)
+	aq, _ := queue.InitializeSender[ToAccWeather]("weatherAccumulator", 0, connection, "")
 	wqEOF, _ := common.CreateConsumerEOF(nil, "weatherQueue", inputQueue, workerWeather)
-	tqEOF, _ := common.CreateConsumerEOF(nil, "weatherQueueTrip", inputTrips, workerTrips)
+	tqEOF, _ := common.CreateConsumerEOF([]common.NextToNotify{{"weatherAccumulator", aq}}, "weatherQueueTrip", inputTrips, workerTrips)
 	grace, _ := common.CreateGracefulManager("rabbit")
 	defer grace.Close()
 	defer common.RecoverFromPanic(grace, "")
@@ -81,14 +107,19 @@ func main() {
 	defer inputTrips.Close()
 	go func() {
 		for {
-			data, id, err := inputQueue.ReceiveMessage()
+			data, msgId, err := inputQueue.ReceiveMessage()
 			utils.LogError(csvReader.Write(data), "could not write info")
 			if data.EOF {
+				if !strings.HasSuffix(data.IdempotencyKey, id) {
+					log.Infof("eof received from another client: %s, not propagating", data.IdempotencyKey)
+					utils.LogError(inputQueue.AckMessage(msgId), "could not acked message")
+					continue
+				}
 				wqEOF.AnswerEofOk(data.IdempotencyKey, actionable{
 					c:  weatherTurn,
 					nc: tripTurn,
 				})
-				inputQueue.AckMessage(id)
+				inputQueue.AckMessage(msgId)
 				continue
 			}
 			s := <-weatherTurn
@@ -97,76 +128,46 @@ func main() {
 				continue
 			}
 			processData(data, acc)
-			inputQueue.AckMessage(id)
+			inputQueue.AckMessage(msgId)
 			weatherTurn <- s
 		}
 	}() // For weather
 
 	go func() {
 		for {
-			data, id, err := inputTrips.ReceiveMessage()
+			data, msgId, err := inputTrips.ReceiveMessage()
 			if data.EOF {
+				if !strings.HasSuffix(data.IdempotencyKey, id) {
+					log.Infof("eof received from another client: %s, not propagating", data.IdempotencyKey)
+					utils.LogError(inputTrips.AckMessage(msgId), "could not acked message")
+					continue
+				}
 				tqEOF.AnswerEofOk(data.IdempotencyKey, actionable{
 					c:  tripTurn,
-					nc: ns,
+					nc: weatherTurn,
+					m:  acc,
 				})
-				inputTrips.AckMessage(id)
+				inputTrips.AckMessage(msgId)
 				continue
 			}
-			s := <-tripTurn
 			if err != nil {
 				utils.FailOnError(err, "Failed while receiving message")
 				continue
 			}
-			processData(data, acc)
-			inputTrips.AckMessage(id)
+			s := <-tripTurn
+			t := getTripsToSend(data, acc)
+			utils.LogError(aq.SendMessage(ToAccWeather{
+				Data: t,
+				EofData: common.EofData{
+					EOF:            false,
+					IdempotencyKey: data.IdempotencyKey,
+				},
+				Key: id,
+			}, id), "could not send message to accumulator")
+			utils.LogError(inputTrips.AckMessage(msgId), "could not acked message")
 			tripTurn <- s
 		}
 	}() // For trip
-
-	go func() {
-		d := preAccumulatorData{
-			DurGathered: 0,
-			Amount:      0,
-		}
-		for i := 0; i < 3; i += 1 {
-			<-ns
-			v := weatherDuration{
-				total:    0,
-				duration: 0,
-			}
-			for _, value := range acc {
-				v.addW(value)
-			}
-			d.DurGathered += v.duration
-			d.Amount += v.total
-
-			acc = make(map[string]weatherDuration, 0)
-			if i != 2 {
-				weatherTurn <- struct{}{}
-			}
-		}
-		var l AccumulatorData
-		if d.Amount == 0 {
-			l = AccumulatorData{
-				Dur: 0,
-				Key: "random",
-			}
-		} else {
-			l = AccumulatorData{
-				Dur: float64(d.DurGathered) / float64(d.Amount),
-				Key: "random",
-			}
-		}
-		_ = aq.SendMessage(l, "")
-		eof := AccumulatorData{EofData: common.EofData{
-			EOF:            true,
-			IdempotencyKey: "random",
-		},
-		}
-		aq.SendMessage(eof, "")
-		weatherTurn <- struct{}{}
-	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
 	common.WaitForSigterm(grace)
@@ -182,11 +183,11 @@ func fillMapWithData(acc map[string]weatherDuration, manager fileManager.Manager
 		utils.FailOnError(err, "could not parse line from file")
 		if data.EOF {
 			counter += 1
-			if maxAmountToContinue <= counter {
-				a.DoActionIfEOF()
-			}
 			continue
 		}
 		processData(data, acc)
+	}
+	if counter%maxAmountToContinue == 0 && counter > 0 {
+		a.DoActionIfEOF()
 	}
 }

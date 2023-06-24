@@ -13,15 +13,16 @@ services:
     - bikers
     volumes:
     - ./accumulators/mainAccumulator/main.go/:/app/main.go
-  accumulator-montreal:
+  accumulator-montreal1:
     build:
       context: ./accumulators/montreal
-    container_name: accumulatorMontreal
+    container_name: accumulatorMontreal1
     depends_on:
       rabbit:
         condition: service_healthy
     environment:
     - calculators=3
+    - id=1
     networks:
     - bikers
   accumulator-stations:
@@ -35,6 +36,8 @@ services:
     - bikers
     volumes:
     - ./accumulators/stationAvg/main.go/:/app/main.go
+    environment:
+      - id=1
   calculator1:
     build:
       context: ./calculator
@@ -107,46 +110,62 @@ services:
       - './distributor/main.go:/app/main.go'
     networks:
     - bikers
-  joiner-montreal:
+  joiner-montreal1:
     build:
       context: ./joiners/montreal
-    container_name: joinerMontreal
+    container_name: joinerMontreal1
     depends_on:
       rabbit:
         condition: service_healthy
     environment:
-    - calculators=3
-    - amountStationsWorkers=3
-    - amountTripsWorkers=3
+      - calculators=3
+      - amountStationsWorkers=3
+      - amountTripsWorkers=3
+      - id=1
     volumes:
       - './joiners/montreal/main.go:/app/main.go'
-      - './joiners/montreal/dto.go:/app/main.go'
+      - './joiners/montreal/dto.go:/app/dto.go'
     networks:
-    - bikers
-  joiner-stations:
+      - bikers
+  joiner-stations1:
     build:
       context: ./joiners/stations
-    container_name: joinerStation
+    container_name: joinerStation1
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+      - amountStationsWorkers=3
+      - amountTripsWorkers=3
+      - id=1
+    networks:
+      - bikers
+  joiner-stations2:
+    build:
+      context: ./joiners/stations
+    container_name: joinerStation2
     depends_on:
       rabbit:
         condition: service_healthy
     environment:
     - amountStationsWorkers=3
     - amountTripsWorkers=3
+    - id=2
     networks:
     - bikers
-  joiner-weather:
+  joiner-weather1:
     build:
       context: ./joiners/weather
-    container_name: joinerWeather
+    container_name: joinerWeather1
     depends_on:
       rabbit:
         condition: service_healthy
     environment:
-    - amountWeatherWorkers=3
-    - amountTripsWorkers=3
+      - amountWeatherWorkers=3
+      - amountTripsWorkers=3
+      - id=1
     networks:
-    - bikers
+      - bikers
   rabbit:
     container_name: rabbitContainer
     healthcheck:
@@ -290,3 +309,17 @@ services:
     - distributors=3
     networks:
     - bikers
+  accumulator-weather1:
+    build:
+      context: ./accumulators/weather
+    container_name: accumulatorWeather1
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+      - id=1
+    volumes:
+      - './accumulators/weather/main.go:/app/main.go'
+      - './accumulators/weather/actionable.go:/app/actionable.go'
+    networks:
+      - bikers

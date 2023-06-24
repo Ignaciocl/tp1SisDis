@@ -38,6 +38,17 @@ type weatherDuration struct {
 	duration int
 }
 
+type WeatherDuration struct {
+	Total    int `json:"total"`
+	Duration int `json:"duration"`
+}
+
+type ToAccWeather struct {
+	Data WeatherDuration `json:"data"`
+	common.EofData
+	Key string `json:"key"`
+}
+
 type transformer struct {
 }
 
