@@ -193,9 +193,9 @@ func main() {
 		weatherTurn <- struct{}{}
 	}()
 
-	healthCheckHandler := commonHealthcheck.InitHealthChecker(serviceName)
+	healthCheckReplier := commonHealthcheck.InitHealthCheckerReplier(serviceName)
 	go func() {
-		err := healthCheckHandler.Run()
+		err := healthCheckReplier.Run()
 		log.Printf("healtchecker error: %v", err)
 	}()
 

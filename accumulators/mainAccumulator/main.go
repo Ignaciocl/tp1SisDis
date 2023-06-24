@@ -99,9 +99,9 @@ func main() {
 		accumulatorInfo.SendMessage(qr, "")
 	}()
 
-	healthCheckHandler := commonHealthcheck.InitHealthChecker(serviceName)
+	healthCheckerReplier := commonHealthcheck.InitHealthCheckerReplier(serviceName)
 	go func() {
-		err := healthCheckHandler.Run()
+		err := healthCheckerReplier.Run()
 		log.Errorf("healtchecker error: %v", err)
 	}()
 

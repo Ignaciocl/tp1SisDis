@@ -115,9 +115,9 @@ func main() {
 		}
 	}()
 
-	healthCheckHandler := commonHealthcheck.InitHealthChecker(serviceName + id)
+	healthCheckerReplier := commonHealthcheck.InitHealthCheckerReplier(serviceName + id)
 	go func() {
-		err := healthCheckHandler.Run()
+		err := healthCheckerReplier.Run()
 		log.Errorf("healtchecker error: %v", err)
 	}()
 

@@ -107,9 +107,9 @@ func (s *Server) Run() error {
 	go s.receivePolling(pollingSocket, dataQuery)
 	go s.receiveData(clientSocket, eofStarter, sender)
 
-	healthCheckHandler := commonHealthcheck.InitHealthChecker(serviceName)
+	healthCheckerReplier := commonHealthcheck.InitHealthCheckerReplier(serviceName)
 	go func() {
-		err := healthCheckHandler.Run()
+		err := healthCheckerReplier.Run()
 		log.Errorf("healtchecker error: %v", err)
 	}()
 	common.WaitForSigterm(gracefulManager)

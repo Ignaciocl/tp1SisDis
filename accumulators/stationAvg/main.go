@@ -141,9 +141,9 @@ func main() {
 		st <- struct{}{}
 	}()
 
-	healthCheckHandler := commonHealthcheck.InitHealthChecker(serviceName)
+	healthCheckerReplier := commonHealthcheck.InitHealthCheckerReplier(serviceName)
 	go func() {
-		err := healthCheckHandler.Run()
+		err := healthCheckerReplier.Run()
 		fmt.Printf("healtchecker error: %v", err)
 	}()
 
