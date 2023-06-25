@@ -47,6 +47,7 @@ type ClientConfig struct {
 
 type Client struct {
 	ID             string
+	messageCounter int
 	config         ClientConfig
 	senderSocket   commons.Client
 	receiverSocket commons.Client
@@ -260,7 +261,6 @@ func (c *Client) sendDataFromFile(filepath string, city string, data string) err
 
 	batchDataCounter := 0 // to know if the batch is full or not
 	batchesSent := 0      // for debugging
-	dataCounter := 0      // data prepend to the data of the file, together with the client ID will comform the idempotency key
 
 	var dataToSend []string
 	for fileScanner.Scan() {
@@ -283,8 +283,8 @@ func (c *Client) sendDataFromFile(filepath string, city string, data string) err
 			break
 		}
 
-		dataCounter += 1
-		lineTransformed := c.transformDataToSend(dataCounter, data, city, line)
+		c.messageCounter += 1
+		lineTransformed := c.transformDataToSend(data, city, line)
 		dataToSend = append(dataToSend, lineTransformed)
 		batchDataCounter += 1
 	}
@@ -456,7 +456,7 @@ func (c *Client) getFilePath(city string, filename string) string {
 // + Message number: the number of the message
 // + Data type: could be weather, trips or stations
 // + City: city which this data belongs
-func (c *Client) transformDataToSend(messageNum int, dataType string, city string, originalData string) string {
-	extraData := fmt.Sprintf("%s,%v,%s,%s", c.ID, messageNum, dataType, city)
+func (c *Client) transformDataToSend(dataType string, city string, originalData string) string {
+	extraData := fmt.Sprintf("%s,%v,%s,%s", c.ID, c.messageCounter, dataType, city)
 	return extraData + c.config.CSVDelimiter + originalData
 }
