@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
 )
 
 func (s *stationAlive) shouldBeConsidered() bool {
@@ -85,7 +86,7 @@ func processDataTrips(data JoinerDataStation, w *mapHolder, aq queue.Sender[PreA
 		}
 		aq.SendMessage(PreAccumulatorData{
 			Data: v,
-			Key:  "random",
+			Key:  data.IdempotencyKey,
 		}, "")
 	}
 }
@@ -121,8 +122,9 @@ func main() {
 		nc: tt,
 	}, workerStation)
 	log.Info("data filled with info previously set")
-	inputQueue, _ := queue.InitializeReceiver[JoinerDataStation]("stationsQueue", "rabbit", "", "", nil)
-	inputQueueTrip, _ := queue.InitializeReceiver[JoinerDataStation]("stationsQueueTrip", "rabbit", "", "", nil)
+	id := os.Getenv("id")
+	inputQueue, _ := queue.InitializeReceiver[JoinerDataStation]("stationsQueue", "rabbit", id, "", nil)
+	inputQueueTrip, _ := queue.InitializeReceiver[JoinerDataStation]("stationsQueueTrip", "rabbit", id, "", nil)
 	aq, _ := queue.InitializeSender[PreAccumulatorData]("preAccumulatorSt", 0, nil, "rabbit")
 	sfe, _ := common.CreateConsumerEOF(nil, "stationsQueue", inputQueue, workerStation)
 	tfe, _ := common.CreateConsumerEOF([]common.NextToNotify{{"preAccumulatorSt", aq}}, "stationsQueueTrip", inputQueueTrip, workerTrips)
@@ -138,6 +140,11 @@ func main() {
 			data, msgId, err := inputQueue.ReceiveMessage()
 			utils.LogError(csvReader.Write(data), "could not write info")
 			if data.EOF {
+				if !strings.HasSuffix(data.IdempotencyKey, id) {
+					log.Infof("eof received from another client: %s, not propagating", data.IdempotencyKey)
+					utils.LogError(inputQueue.AckMessage(msgId), "could not acked message")
+					continue
+				}
 				sfe.AnswerEofOk(data.IdempotencyKey, actionable{
 					c:  st,
 					nc: tt,
@@ -160,6 +167,11 @@ func main() {
 			data, msgId, err := inputQueueTrip.ReceiveMessage()
 			if data.EOF {
 				log.Printf("joiner station trip eof received")
+				if !strings.HasSuffix(data.IdempotencyKey, id) {
+					log.Infof("eof received from another client: %s, not propagating", data.IdempotencyKey)
+					utils.LogError(inputQueueTrip.AckMessage(msgId), "could not acked message")
+					continue
+				}
 				tfe.AnswerEofOk(data.IdempotencyKey, actionable{
 					c:  tt,
 					nc: st,
@@ -191,11 +203,11 @@ func fillMapWithData(acc *mapHolder, manager fileManager.Manager[JoinerDataStati
 		utils.FailOnError(err, "could not parse line from file")
 		if data.EOF {
 			counter += 1
-			if maxAmountToContinue <= counter {
-				a.DoActionIfEOF()
-			}
 			continue
 		}
 		processData(data, acc)
+	}
+	if counter%maxAmountToContinue == 0 && counter > 0 {
+		a.DoActionIfEOF()
 	}
 }

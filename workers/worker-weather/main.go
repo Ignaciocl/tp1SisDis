@@ -59,7 +59,7 @@ func processData(
 			Date: getDate(weather.Data.Date),
 		},
 	}
-	err := qt.SendMessage(d, "")
+	err := qt.SendMessage(d, weather.Key)
 	if err != nil {
 		utils.FailOnError(err, "Couldn't send message to joiner stations, failing horribly")
 	}

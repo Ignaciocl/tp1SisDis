@@ -48,8 +48,8 @@ type SendableDataWeather struct {
 type JoinerData[T any] struct {
 	Data []T    `json:"tripData"`
 	Key  string `json:"key"`
-	EOF  bool   `json:"EOF"`
 	City string `json:"city,omitempty"`
+	common.EofData
 }
 
 const MontrealStation = "montreal"
@@ -89,29 +89,38 @@ func processData(
 
 	if trip.City == MontrealStation {
 		err := qm.SendMessage(JoinerData[SendableDataMontreal]{
-			Key:  trip.Key,
-			EOF:  trip.EOF,
+			Key: trip.Key,
+			EofData: common.EofData{
+				EOF:            false,
+				IdempotencyKey: trip.IdempotencyKey,
+			},
 			Data: vm,
-		}, "")
+		}, trip.Key)
 		if err != nil {
 			utils.FailOnError(err, "Couldn't send message to joiner montreal, failing horribly")
 		}
 	}
 	err := qs.SendMessage(JoinerData[SendableDataAvg]{
-		Key:  trip.Key,
-		EOF:  trip.EOF,
+		Key: trip.Key,
+		EofData: common.EofData{
+			EOF:            false,
+			IdempotencyKey: trip.IdempotencyKey,
+		},
 		Data: vy,
 		City: trip.City,
-	}, "")
+	}, trip.Key)
 	if err != nil {
 		utils.FailOnError(err, "Couldn't send message to joiner stations, failing horribly")
 	}
 	err = qt.SendMessage(JoinerData[SendableDataWeather]{
-		Key:  trip.Key,
-		EOF:  trip.EOF,
+		Key: trip.Key,
+		EofData: common.EofData{
+			EOF:            false,
+			IdempotencyKey: trip.IdempotencyKey,
+		},
 		City: trip.City,
 		Data: va,
-	}, "")
+	}, trip.Key)
 	if err != nil {
 		utils.FailOnError(err, "Couldn't send message to joiner stations, failing horribly")
 	}

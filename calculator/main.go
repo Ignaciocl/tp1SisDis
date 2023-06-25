@@ -8,6 +8,7 @@ import (
 	lasPistasDeBlue "github.com/umahmood/haversine"
 	"os"
 	"strconv"
+	"strings"
 )
 
 type JoinerData struct {
@@ -96,7 +97,8 @@ func main() {
 				continue
 			}
 			ad := getAccumulatorData(data.Data)
-			aq.SendMessage(AccumulatorInfo{Data: ad}, "")
+			keys := strings.Split(data.IdempotencyKey, "-")
+			aq.SendMessage(AccumulatorInfo{Data: ad}, keys[len(keys)-1])
 			utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 		}
 	}()

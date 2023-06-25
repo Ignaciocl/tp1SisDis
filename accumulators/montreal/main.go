@@ -61,9 +61,10 @@ func (a actionable) DoActionIfEOF() {
 }
 
 func main() {
+	id := os.Getenv("id")
 	amountCalc, err := strconv.Atoi(os.Getenv("calculators"))
 	utils.FailOnError(err, "missing env value of calculator")
-	inputQueue, _ := queue.InitializeReceiver[AccumulatorInfo]("preAccumulatorMontreal", "rabbit", "", "", nil)
+	inputQueue, _ := queue.InitializeReceiver[AccumulatorInfo]("preAccumulatorMontreal", "rabbit", id, "", nil)
 	outputQueue, _ := queue.InitializeSender[Accumulator]("accumulator", 0, nil, "rabbit")
 	me, _ := common.CreateConsumerEOF(nil, "preAccumulatorMontreal", inputQueue, amountCalc)
 	grace, _ := common.CreateGracefulManager("rabbit")
@@ -98,7 +99,7 @@ func main() {
 	}()
 	go func() {
 		d := <-eof
-		d.IdempotencyKey = "random"
+		d.IdempotencyKey = id
 		va := make([]dStation, 0)
 		v := make([]string, 0, len(acc))
 		for key, value := range acc {
@@ -107,7 +108,7 @@ func main() {
 				va = append(va, value)
 			}
 		}
-		_ = outputQueue.SendMessage(Accumulator{Stations: v, Key: "random"}, "") // do graceful shutdown
+		_ = outputQueue.SendMessage(Accumulator{Stations: v, Key: id}, "") // do graceful shutdown
 		_ = outputQueue.SendMessage(Accumulator{EofData: d}, "")
 	}()
 

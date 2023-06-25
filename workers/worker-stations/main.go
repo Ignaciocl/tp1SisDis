@@ -56,13 +56,13 @@ func processData(station WorkerStation, qm, qs queue.Sender[JoinerDataStation]) 
 		EOF:  station.EOF,
 	}
 	if station.City == MontrealStation {
-		err := qm.SendMessage(js, "")
+		err := qm.SendMessage(js, station.Key)
 		if err != nil {
 			utils.FailOnError(err, "Couldn't send message to joiner montreal, failing horribly")
 		}
 	}
 	if station.Data.Year == 2016 || station.Data.Year == 2017 {
-		err := qs.SendMessage(js, "")
+		err := qs.SendMessage(js, station.Key)
 		if err != nil {
 			utils.FailOnError(err, "Couldn't send message to joiner stations, failing horribly")
 		}

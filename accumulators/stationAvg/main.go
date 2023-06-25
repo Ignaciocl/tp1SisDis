@@ -4,6 +4,7 @@ import (
 	common "github.com/Ignaciocl/tp1SisdisCommons"
 	"github.com/Ignaciocl/tp1SisdisCommons/queue"
 	"github.com/Ignaciocl/tp1SisdisCommons/utils"
+	"os"
 )
 
 type ReceivableDataStation struct {
@@ -70,6 +71,7 @@ func (a actionable) DoActionIfEOF() {
 }
 
 func main() {
+	id := os.Getenv("id")
 	inputQueue, _ := queue.InitializeReceiver[JoinerDataStation]("preAccumulatorSt", "rabbit", "", "", nil)
 	aq, _ := queue.InitializeSender[AccumulatorData]("accumulator", 0, nil, "rabbit")
 	sfe, _ := common.CreateConsumerEOF(nil, "preAccumulatorSt", inputQueue, 1)
@@ -124,13 +126,13 @@ func main() {
 		}
 		l := AccumulatorData{
 			AvgStations: v,
-			Key:         "random",
+			Key:         id,
 		}
 
 		_ = aq.SendMessage(l, "")
 		eof := AccumulatorData{EofData: common.EofData{
 			EOF:            true,
-			IdempotencyKey: "random",
+			IdempotencyKey: id,
 		},
 		}
 		aq.SendMessage(eof, "")
