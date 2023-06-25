@@ -1,6 +1,6 @@
 protocol: 'tcp'
-port: 9000
-polling_port: 3334
+input_port: 3034
+output_port: 3334
 packet_limit: 8192 # 8 * 1024
 
 connection_string: 'rabbit'

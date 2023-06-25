@@ -10,8 +10,8 @@ const configFilePath = "./internal/config/config.yaml"
 
 type ServerConfig struct {
 	Protocol                string          `yaml:"protocol"`
-	Port                    int             `yaml:"port"`
-	PollingPort             int             `yaml:"polling_port"`
+	InputPort               int             `yaml:"input_port"`
+	OutputPort              int             `yaml:"output_port"`
 	PacketLimit             int             `yaml:"packet_limit"`
 	ConnectionString        string          `yaml:"connection_string"`
 	KeepTryingMessage       string          `yaml:"keep_trying_message"`

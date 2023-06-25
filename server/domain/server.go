@@ -38,8 +38,8 @@ func NewServer(config *config.ServerConfig) *Server {
 
 func (s *Server) Run() error {
 	// Initialize clients
-	nodeAddress := fmt.Sprintf("%s:%v", serviceName, s.config.Port)
-	pollingAddress := fmt.Sprintf("%s:%v", serviceName, s.config.PollingPort)
+	nodeAddress := fmt.Sprintf("%s:%v", serviceName, s.config.InputPort)
+	pollingAddress := fmt.Sprintf("%s:%v", serviceName, s.config.OutputPort)
 	clientSocket := client.NewSocket(client.NewSocketConfig(
 		s.config.Protocol,
 		nodeAddress,
