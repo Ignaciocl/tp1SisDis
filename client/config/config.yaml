@@ -1,16 +1,21 @@
+protocol: "tcp"
+server_address: "server:3034"
+server_response_address: "server:3334"
+get_response_message: "queryresponses-PONG"
+packet_limit: 8192 # 8 * 1024
+max_connection_reties: 15
+retry_delay: 1s
+
 batch_size: 50
 end_batch_marker: "PING"
 fin_marker: "PONG"
 server_ack: "PONG"
-server_address: "server:12345"
-server_response_address: "server:6969"
-get_response_message: "queryresponses-PONG"
-packet_limit: 8192 # 8 * 1024
 csv_delimiter: ","
 data_delimiter: "|"
-protocol: "tcp"
+
+
 fin_ack_messages:
-  - "weather-PONG"
-  - "stations-PONG"
-  - "trips-PONG"
-  - "queryresponses-PONG"
+  weather: "FIN-weather"
+  stations: "FIN-stations"
+  trips: "FIN-trips"
+  query: "FIN-queryresponses"
