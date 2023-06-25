@@ -47,7 +47,7 @@ func processData(data JoinerDataStation, acc map[string]stationData, db fileMana
 				LastSetIdempotencyKey: data.IdempotencyKey,
 			}
 			nd.addYear(ds.Year)
-			utils.LogError(db.Write(&d), "could not write into db")
+			utils.LogError(db.Write(&nd), "could not write into db")
 			acc[ds.Name] = nd
 		}
 	}
