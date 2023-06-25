@@ -33,8 +33,11 @@ func processData(data JoinerDataStation, acc map[string]stationData, db fileMana
 	if data.DataStation == nil {
 		return
 	}
+	currentRunValues := map[string]bool{}
 	for _, ds := range data.DataStation {
-		if d, ok := acc[ds.Name]; ok && data.IdempotencyKey != d.LastSetIdempotencyKey {
+		_, alreadyUsedThisRun := currentRunValues[ds.Name]
+		if d, ok := acc[ds.Name]; ok && (data.IdempotencyKey != d.LastSetIdempotencyKey || alreadyUsedThisRun) {
+			currentRunValues[ds.Name] = true
 			d.LastSetIdempotencyKey = data.IdempotencyKey
 			d.addYear(ds.Year)
 			utils.LogError(db.Write(&d), "could not write into db")
