@@ -79,20 +79,42 @@ func NewClient(id string, clientConfig ClientConfig) *Client {
 
 // EstablishSenderConnection creates a TCP connection with the server to send the data from files
 func (c *Client) EstablishSenderConnection() error {
-	err := c.senderSocket.OpenConnection()
-	if err != nil {
-		return err
+	retriesCounter := 0
+	for {
+		if retriesCounter == c.config.MaxConnectionRetries {
+			return fmt.Errorf("error max retries attempts reached, cannot connect sender to server")
+		}
+
+		err := c.senderSocket.OpenConnection()
+		if err != nil {
+			retriesCounter += 1
+			time.Sleep(c.config.RetryDelay)
+			continue
+		}
+
+		log.Infof("Sender connected!")
+		return nil
 	}
-	return nil
 }
 
 // EstablishReceiverConnection creates a TCP connection with the server to receive a response of the query
 func (c *Client) EstablishReceiverConnection() error {
-	err := c.receiverSocket.OpenConnection()
-	if err != nil {
-		return err
+	retriesCounter := 0
+	for {
+		if retriesCounter == c.config.MaxConnectionRetries {
+			return fmt.Errorf("error max retries attempts reached, cannot connect receiver to server")
+		}
+
+		err := c.receiverSocket.OpenConnection()
+		if err != nil {
+			retriesCounter += 1
+			time.Sleep(c.config.RetryDelay)
+			continue
+		}
+
+		log.Infof("Receiver connected!")
+		return nil
 	}
-	return nil
 }
 
 // Close closes the TCP connections with the server
@@ -201,7 +223,8 @@ func (c *Client) GetResponses() error {
 		err := c.receiverSocket.Send(messageBytes)
 
 		if errors.Is(err, io.EOF) {
-			err = c.reconnectReceiver()
+			log.Infof("connection with server lost. Reconnecting receiver...")
+			err = c.EstablishReceiverConnection()
 			if err != nil {
 				return err
 			}
@@ -215,7 +238,8 @@ func (c *Client) GetResponses() error {
 		response, err := c.receiverSocket.Listen()
 
 		if errors.Is(err, io.EOF) {
-			err = c.reconnectReceiver()
+			log.Infof("connection with server lost. Reconnecting receiver...")
+			err = c.EstablishReceiverConnection()
 			if err != nil {
 				return err
 			}
@@ -315,7 +339,8 @@ func (c *Client) sendFinMessage(dataType string) error {
 		err := c.senderSocket.Send(finMessageBytes)
 
 		if errors.Is(err, io.EOF) {
-			err = c.reconnectSender()
+			log.Infof("connection with server lost. Reconnecting sender...")
+			err = c.EstablishSenderConnection()
 			if err != nil {
 				return err
 			}
@@ -330,7 +355,8 @@ func (c *Client) sendFinMessage(dataType string) error {
 		response, err := c.senderSocket.Listen()
 
 		if errors.Is(err, io.EOF) {
-			err = c.reconnectSender()
+			log.Infof("connection with server lost. Reconnecting sender...")
+			err = c.EstablishSenderConnection()
 			if err != nil {
 				return err
 			}
@@ -351,48 +377,6 @@ func (c *Client) sendFinMessage(dataType string) error {
 	}
 }
 
-// reconnectSender reconnects the sender socket to the server
-func (c *Client) reconnectSender() error {
-	log.Infof("connection with server lost. Reconnecting sender...")
-	retriesCounter := 0
-	for {
-		if retriesCounter == c.config.MaxConnectionRetries {
-			return fmt.Errorf("error max retries attempts reached, cannot connect sender to server")
-		}
-
-		err := c.senderSocket.OpenConnection()
-		if err != nil {
-			retriesCounter += 1
-			time.Sleep(c.config.RetryDelay)
-			continue
-		}
-
-		log.Infof("Sender connected again!")
-		return nil
-	}
-}
-
-// reconnectReceiver reconnects the receiver socket to the server
-func (c *Client) reconnectReceiver() error {
-	log.Infof("connection with server lost. Reconnecting receiver...")
-	retriesCounter := 0
-	for {
-		if retriesCounter == c.config.MaxConnectionRetries {
-			return fmt.Errorf("error max retries attempts reached, cannot connect receiver to server")
-		}
-
-		err := c.receiverSocket.OpenConnection()
-		if err != nil {
-			retriesCounter += 1
-			time.Sleep(c.config.RetryDelay)
-			continue
-		}
-
-		log.Infof("Receiver connected again!")
-		return nil
-	}
-}
-
 // sendBatch sends a batch with data to the server and waits for its ACK
 func (c *Client) sendBatch(batch []string) error {
 	debugCity := strings.SplitN(batch[0], ",", 6)[3]
@@ -406,7 +390,8 @@ func (c *Client) sendBatch(batch []string) error {
 		err := c.senderSocket.Send(dataJoinedBytes)
 
 		if errors.Is(err, io.EOF) {
-			err = c.reconnectSender()
+			log.Infof("connection with server lost. Reconnecting sender...")
+			err = c.EstablishSenderConnection()
 			if err != nil {
 				return err
 			}
@@ -421,7 +406,8 @@ func (c *Client) sendBatch(batch []string) error {
 		response, err := c.senderSocket.Listen()
 
 		if errors.Is(err, io.EOF) {
-			err = c.reconnectSender()
+			log.Infof("connection with server lost. Reconnecting sender...")
+			err = c.EstablishSenderConnection()
 			if err != nil {
 				return err
 			}
