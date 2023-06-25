@@ -66,7 +66,7 @@ func processData(data JoinerDataStation, w *mapHolder) {
 	}
 }
 
-func processDataTrips(data JoinerDataStation, w *mapHolder, aq queue.Sender[PreAccumulatorData]) {
+func processDataTrips(data JoinerDataStation, w *mapHolder, aq queue.Sender[PreAccumulatorData], id string) {
 	accumulator := w.m
 	alive := w.stationToYear
 	if trips := data.DataTrip; trips != nil {
@@ -85,9 +85,10 @@ func processDataTrips(data JoinerDataStation, w *mapHolder, aq queue.Sender[PreA
 			})
 		}
 		aq.SendMessage(PreAccumulatorData{
-			Data: v,
-			Key:  data.IdempotencyKey,
-		}, "")
+			Data:    v,
+			Key:     data.IdempotencyKey,
+			EofData: common.EofData{IdempotencyKey: data.IdempotencyKey},
+		}, id)
 	}
 }
 
@@ -184,7 +185,7 @@ func main() {
 				utils.FailOnError(err, "Failed while receiving message")
 				continue
 			}
-			processDataTrips(data, &w, aq)
+			processDataTrips(data, &w, aq, id)
 			utils.LogError(inputQueueTrip.AckMessage(msgId), "failed while trying ack")
 			tt <- p
 		}

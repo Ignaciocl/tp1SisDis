@@ -94,11 +94,15 @@ func main() {
 			if ik.IsKey(data.IdempotencyKey) {
 				// log.Infof("%v already exists on map", data)
 			}
+			//if data.IdempotencyKey == acc.LastIdempotencyKey {
+			//	utils.LogError(ik.AddKey(data.IdempotencyKey), "could not add idempotency key")
+			//	continue
+			//}
 			acc.Total += data.Data.Total
 			acc.Duration += data.Data.Duration
 			acc.LastIdempotencyKey = data.IdempotencyKey
-			utils.LogError(ik.AddKey(data.IdempotencyKey), "could not add idempotency key")
 			db.Write(&acc)
+			utils.LogError(ik.AddKey(data.IdempotencyKey), "could not add idempotency key")
 			utils.LogError(inputQueue.AckMessage(msgId), "error while acking msg")
 		}
 	}()

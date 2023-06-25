@@ -1,9 +1,15 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
+	"github.com/Ignaciocl/tp1SisdisCommons/fileManager"
+	"github.com/Ignaciocl/tp1SisdisCommons/keyChecker"
 	"github.com/Ignaciocl/tp1SisdisCommons/queue"
 	"github.com/Ignaciocl/tp1SisdisCommons/utils"
+	log "github.com/sirupsen/logrus"
+	"io"
 	"os"
 )
 
@@ -23,76 +29,93 @@ type AccumulatorData struct {
 	common.EofData
 }
 
-type stationData struct {
-	sweetSixteen int
-	sadSeventeen int
-	name         string
-}
-
-func (sd *stationData) wasDouble() bool {
-	return sd.sadSeventeen > 2*sd.sweetSixteen
-}
-
-func (sd *stationData) addYear(year int) {
-	if year == 2016 {
-		sd.sweetSixteen += 1
-	} else if year == 2017 {
-		sd.sadSeventeen += 1
-	}
-}
-
-func processData(data JoinerDataStation, acc map[string]stationData) {
+func processData(data JoinerDataStation, acc map[string]stationData, db fileManager.Manager[*stationData]) {
 	if data.DataStation == nil {
 		return
 	}
 	for _, ds := range data.DataStation {
-		if d, ok := acc[ds.Name]; ok {
+		if d, ok := acc[ds.Name]; ok && data.IdempotencyKey != d.LastSetIdempotencyKey {
+			d.LastSetIdempotencyKey = data.IdempotencyKey
 			d.addYear(ds.Year)
+			utils.LogError(db.Write(&d), "could not write into db")
 			acc[ds.Name] = d
-		} else {
+		} else if !ok && ds.Name != "" {
 			nd := stationData{
-				sweetSixteen: 0,
-				sadSeventeen: 0,
-				name:         ds.Name,
+				SweetSixteen:          0,
+				SadSeventeen:          0,
+				Name:                  ds.Name,
+				LastSetIdempotencyKey: data.IdempotencyKey,
 			}
 			nd.addYear(ds.Year)
+			utils.LogError(db.Write(&d), "could not write into db")
 			acc[ds.Name] = nd
 		}
 	}
 }
 
 type actionable struct {
-	c  chan struct{}
-	nc chan struct{}
+	acc map[string]stationData
+	id  string
+	aq  queue.Sender[AccumulatorData]
 }
 
 func (a actionable) DoActionIfEOF() {
-	a.nc <- <-a.c // continue the loop
+	savedData := make(map[string][]int, 0)
+	for _, value := range a.acc {
+		if value.wasDouble() && value.Name != "" {
+			savedData[value.Name] = []int{value.SweetSixteen, value.SadSeventeen}
+		}
+	}
+
+	v := make([]string, 0, len(savedData))
+	for key, _ := range savedData {
+		v = append(v, key)
+	}
+	l := AccumulatorData{
+		AvgStations: v,
+		Key:         a.id,
+		EofData: common.EofData{
+			IdempotencyKey: fmt.Sprintf("key:%s-amount:%d", a.id, len(savedData)),
+		},
+	}
+
+	log.Infof("sending message to accumulator")
+	utils.LogError(a.aq.SendMessage(l, ""), "could not send message to accumulator")
 }
 
 func main() {
 	id := os.Getenv("id")
-	inputQueue, _ := queue.InitializeReceiver[JoinerDataStation]("preAccumulatorSt", "rabbit", "", "", nil)
+	db, err := fileManager.CreateDB[*stationData](t{}, "cambiameAcaLicha", 300, Sep)
+	utils.FailOnError(err, "could not create db")
+	acc := map[string]stationData{}
+	eofDb, err := fileManager.CreateDB[*eofData](t2{}, "cambiameAcaLichaEOF", 300, Sep)
+	ik, err := keyChecker.CreateIdempotencyChecker(20)
+	utils.FailOnError(err, "could not create db")
+	inputQueue, _ := queue.InitializeReceiver[JoinerDataStation]("preAccumulatorSt", "rabbit", id, "", nil)
 	aq, _ := queue.InitializeSender[AccumulatorData]("accumulator", 0, nil, "rabbit")
-	sfe, _ := common.CreateConsumerEOF(nil, "preAccumulatorSt", inputQueue, 1)
+	sfe, _ := common.CreateConsumerEOF([]common.NextToNotify{{"accumulator", aq}}, "preAccumulatorSt", inputQueue, 3)
 	grace, _ := common.CreateGracefulManager("rabbit")
 	defer grace.Close()
 	defer common.RecoverFromPanic(grace, "")
 	defer sfe.Close()
 	defer inputQueue.Close()
 	defer aq.Close()
-	ns := make(chan struct{}, 1)
-	st := make(chan struct{}, 1)
-	st <- struct{}{}
-	acc := map[string]stationData{}
+	actionableEOF := actionable{
+		acc: acc,
+		aq:  aq,
+		id:  id,
+	}
+	utils.FailOnError(fillData(acc, db, eofDb, sfe, actionableEOF), "could not fill with data from the db")
 	go func() {
 		for {
 			data, msgId, err := inputQueue.ReceiveMessage()
 			if data.EOF {
-				sfe.AnswerEofOk(data.IdempotencyKey, actionable{
-					c:  st,
-					nc: ns,
-				})
+				idempotencyKey := id
+				utils.LogError(eofDb.Write(&eofData{
+					IdempotencyKey: idempotencyKey,
+					Id:             0,
+				}), "could not write in eof db")
+				sfe.AnswerEofOk(idempotencyKey, actionableEOF)
 				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 				continue
 			}
@@ -100,44 +123,39 @@ func main() {
 				utils.FailOnError(err, "Failed while receiving message")
 				continue
 			}
-			p := <-st
-			processData(data, acc)
+			if ik.IsKey(data.IdempotencyKey) {
+				// utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
+				// continue
+			}
+			processData(data, acc, db)
+			utils.LogError(ik.AddKey(data.IdempotencyKey), "could not store idempotency key")
 			utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
-			st <- p
 		}
 	}()
-	go func() {
-		savedData := make(map[string][]int, 0)
-		for i := 0; i < 3; i += 1 {
-			<-ns
-			for _, value := range acc {
-				if value.wasDouble() && value.name != "" {
-					savedData[value.name] = []int{value.sweetSixteen, value.sadSeventeen}
-				}
-			}
 
-			if i != 2 {
-				st <- struct{}{}
-			}
-		}
-		v := make([]string, 0, len(savedData))
-		for key, _ := range savedData {
-			v = append(v, key)
-		}
-		l := AccumulatorData{
-			AvgStations: v,
-			Key:         id,
-		}
-
-		_ = aq.SendMessage(l, "")
-		eof := AccumulatorData{EofData: common.EofData{
-			EOF:            true,
-			IdempotencyKey: id,
-		},
-		}
-		aq.SendMessage(eof, "")
-		st <- struct{}{}
-	}()
-
+	log.Infof("waiting for messages")
 	common.WaitForSigterm(grace)
+}
+
+func fillData(acc map[string]stationData, db fileManager.Manager[*stationData], eofDb fileManager.Manager[*eofData], sfe common.WaitForEof, eof actionable) error {
+	for {
+		line, err := db.ReadLine()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return err
+		}
+		acc[line.Name] = *line
+	}
+	for {
+		line, err := eofDb.ReadLine()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			return err
+		}
+		sfe.AnswerEofOk(line.IdempotencyKey, eof)
+	}
 }

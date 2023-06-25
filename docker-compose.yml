@@ -25,10 +25,10 @@ services:
     - id=1
     networks:
     - bikers
-  accumulator-stations:
+  accumulator-stations1:
     build:
       context: ./accumulators/stationAvg
-    container_name: accumulatorStationAvg
+    container_name: accumulatorStationAvg1
     depends_on:
       rabbit:
         condition: service_healthy
