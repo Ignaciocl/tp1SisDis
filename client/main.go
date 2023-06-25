@@ -3,20 +3,19 @@ package main
 import (
 	"fmt"
 	"github.com/Ignaciocl/tp1SisdisCommons/configloader"
-	"gopkg.in/yaml.v3"
-	"os"
-	"sync"
-
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v3"
+	"os"
 )
 
 const (
-	testEnvVar = "TEST_MODE"
-	filepath   = "./config/config.yaml"
+	testEnvVar      = "TEST_MODE"
+	clientIDEnvVar  = "CLIENT_ID"
+	logLevelEnvVar  = "LOG_LEVEL"
+	defaultLogLevel = "DEBUG"
+	filepath        = "./config/config.yaml"
 )
-
-var dataTypes = []string{"weather", "stations", "trips"} // Debugging data to sent: "weather", "stations", "trips"
 
 func LoadClientConfig() (ClientConfig, error) {
 	configFile, err := configloader.GetConfigFileAsBytes(filepath)
@@ -55,12 +54,20 @@ func InitLogger(logLevel string) error {
 }
 
 func main() {
-	logLevel := os.Getenv("LOG_LEVEL")
+	logLevel := os.Getenv(logLevelEnvVar)
 	if logLevel == "" {
-		logLevel = "DEBUG"
+		logLevel = defaultLogLevel
 	}
+
 	if err := InitLogger(logLevel); err != nil {
-		log.Fatalf("%s", err)
+		fmt.Printf("error initializating logger: %v", err)
+		os.Exit(1)
+	}
+
+	clientID := os.Getenv(clientIDEnvVar)
+	if clientID == "" {
+		fmt.Printf("error missing client ID")
+		return
 	}
 
 	clientConfig, err := LoadClientConfig()
@@ -70,70 +77,32 @@ func main() {
 	}
 
 	log.Debugf("client config: %+v", clientConfig)
+	client := NewClient(clientID, clientConfig)
+	defer client.Close()
 
-	var wg sync.WaitGroup
-	for _, data := range dataTypes {
-		wg.Add(1)
-		client := NewClient(clientConfig)
-
-		go func(data string) {
-			defer wg.Done()
-			err := sendData(client, data)
-			if err != nil {
-				fmt.Printf("error sendind %s data from cliente: %s", data, err.Error())
-			}
-		}(data)
+	err = client.EstablishSenderConnection()
+	if err != nil {
+		log.Errorf("error establishing connection with server to send data: %v", err)
+		return
 	}
 
-	log.Info("[client] Waiting for threads")
-	wg.Wait()
-
-	client := NewClient(clientConfig)
-	err = client.OpenConnection(client.config.ServerResponseAddress)
+	err = client.SendData()
 	if err != nil {
-		log.Errorf("Error opening connection for responses: %s", err.Error())
+		log.Errorf("error sending data to server: %v", err)
+		return
+	}
+
+	err = client.EstablishReceiverConnection()
+	if err != nil {
+		log.Errorf("error establishing connection with server to receive responses: %v", err)
 		return
 	}
 
 	err = client.GetResponses()
 	if err != nil {
-		log.Errorf("Error getting responses: %s", err.Error())
+		log.Errorf("error receiveng responses from server: %v", err)
 		return
 	}
-	log.Info("[client] Finish main.go")
-}
 
-func sendData(client *Client, data string) error {
-	err := client.OpenConnection(client.config.ServerAddress)
-	defer func(client *Client) {
-		err := client.CloseConnection()
-		if err != nil {
-			log.Error("[client] error closing connection")
-			return
-		}
-		log.Info("[client] connection closed successfully!")
-	}(client)
-	if err != nil {
-		logrus.Errorf(err.Error())
-		return err
-	}
-
-	if data == "weather" {
-		err = client.SendWeatherData()
-	}
-
-	if data == "trips" {
-		err = client.SendTripsData()
-	}
-
-	if data == "stations" {
-		err = client.SendStationsData()
-	}
-
-	if err != nil {
-		logrus.Errorf(err.Error())
-		return err
-	}
-
-	return nil
+	log.Info("Well, that's all folks! Ci vediamo")
 }
