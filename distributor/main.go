@@ -35,11 +35,13 @@ func SendMessagesToQueue(data []interface{}, queue queue.Sender[SendableData], c
 		err := queue.SendMessage(SendableData{
 			City: city,
 			Data: v,
-			Key:  "random",
-			EOF:  false,
-		}, "")
+			Key:  "1",
+		}
+		d.EOF = false
+		d.IdempotencyKey = fmt.Sprintf("%s-%d", ik, i)
+		err := queue.SendMessage(d, "")
 		if err != nil {
-
+			log.Errorf("error while sending a message to next step")
 		}
 	}
 }*/

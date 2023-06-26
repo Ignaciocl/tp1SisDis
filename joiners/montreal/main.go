@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
 )
 
 const serviceName = "joiner-montreal"
@@ -27,7 +28,7 @@ func processData(station JoinerDataStation, accumulator map[string]sData) {
 	}
 }
 
-func processTripData(trip *[]SendableDataTrip, accumulator map[string]sData, aq queue.Sender[AccumulatorInfo]) {
+func processTripData(trip *[]SendableDataTrip, accumulator map[string]sData, aq queue.Sender[AccumulatorInfo], ik string) {
 	if trip == nil {
 		log.Error("trip is nil, no processing is made but something must be checked")
 		return
@@ -41,6 +42,9 @@ func processTripData(trip *[]SendableDataTrip, accumulator map[string]sData, aq 
 	}
 	aq.SendMessage(AccumulatorInfo{
 		Data: vToSend,
+		EofData: common.EofData{
+			IdempotencyKey: ik,
+		},
 	}, "")
 }
 
@@ -81,6 +85,7 @@ func main() {
 	utils.FailOnError(err, "missing env value of worker stations")
 	workerTrips, err := strconv.Atoi(os.Getenv("amountTripsWorkers"))
 	utils.FailOnError(err, "missing env value of worker trips")
+	id := os.Getenv("id")
 	acc := make(map[string]sData)
 	csvReader, err := fileManager.CreateCSVFileManager[JoinerDataStation](transformer{}, "ponemeElNombreLicha.csv")
 	utils.FailOnError(err, "could not load csv file")
@@ -92,8 +97,8 @@ func main() {
 		nc: tt,
 	}, workerStation)
 	log.Info("data filled with info previously set")
-	inputQueue, _ := queue.InitializeReceiver[JoinerDataStation]("montrealQueue", "rabbit", "", "", nil)
-	inputQueueTrip, _ := queue.InitializeReceiver[JoinerDataStation]("montrealQueueTrip", "rabbit", "", "", nil)
+	inputQueue, _ := queue.InitializeReceiver[JoinerDataStation]("montrealQueue", "rabbit", id, "", nil)
+	inputQueueTrip, _ := queue.InitializeReceiver[JoinerDataStation]("montrealQueueTrip", "rabbit", id, "", nil)
 	aq, _ := queue.InitializeSender[AccumulatorInfo]("calculatorMontreal", amountCalc, nil, "rabbit")
 	sfe, _ := common.CreateConsumerEOF(nil, "montrealQueue", inputQueue, workerStation)
 	tfe, _ := common.CreateConsumerEOF([]common.NextToNotify{{Name: "calculatorMontreal", Connection: aq}}, "montrealQueueTrip", inputQueueTrip, workerTrips)
@@ -108,6 +113,11 @@ func main() {
 			data, msgId, err := inputQueue.ReceiveMessage()
 			utils.LogError(csvReader.Write(data), "could not write info")
 			if data.EOF {
+				if !strings.HasSuffix(data.IdempotencyKey, id) {
+					log.Infof("eof received from another client: %s, not propagating", data.IdempotencyKey)
+					utils.LogError(inputQueue.AckMessage(msgId), "could not acked message")
+					continue
+				}
 				sfe.AnswerEofOk(data.IdempotencyKey, actionable{
 					c:  st,
 					nc: tt,
@@ -129,7 +139,11 @@ func main() {
 		for {
 			data, msgId, err := inputQueueTrip.ReceiveMessage()
 			if data.EOF {
-
+				if !strings.HasSuffix(data.IdempotencyKey, id) {
+					log.Infof("eof received from another client: %s, not propagating", data.IdempotencyKey)
+					utils.LogError(inputQueueTrip.AckMessage(msgId), "could not acked message")
+					continue
+				}
 				tfe.AnswerEofOk(data.IdempotencyKey, actionable{
 					c:  tt,
 					nc: st,
@@ -142,7 +156,7 @@ func main() {
 				continue
 			}
 			d := <-tt
-			processTripData(data.DataTrip, acc, aq)
+			processTripData(data.DataTrip, acc, aq, data.IdempotencyKey)
 			utils.LogError(inputQueueTrip.AckMessage(msgId), "failed while trying ack")
 			tt <- d
 		}
@@ -168,11 +182,11 @@ func fillMapWithData(acc map[string]sData, manager fileManager.Manager[JoinerDat
 		utils.FailOnError(err, "could not parse line from file")
 		if data.EOF {
 			counter += 1
-			if maxAmountToContinue <= counter {
-				a.DoActionIfEOF()
-			}
 			continue
 		}
 		processData(data, acc)
+	}
+	if counter%maxAmountToContinue == 0 && counter > 0 {
+		a.DoActionIfEOF()
 	}
 }
