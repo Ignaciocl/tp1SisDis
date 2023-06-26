@@ -1,6 +1,7 @@
 package dtos
 
 import (
+	common "github.com/Ignaciocl/tp1SisdisCommons"
 	"github.com/Ignaciocl/tp1SisdisCommons/dtos"
 )
 
@@ -9,10 +10,10 @@ type InputData struct {
 	Data     []string      `json:"data"`
 }
 type JoinerDataStation struct {
-	City           string      `json:"city"`
-	Data           StationData `json:"stationData"`
-	IdempotencyKey string      `json:"key"`
-	EOF            bool        `json:"EOF"`
+	City     string      `json:"city"`
+	Data     StationData `json:"stationData"`
+	ClientID string      `json:"key"`
+	common.EofData
 }
 
 type StationData struct {

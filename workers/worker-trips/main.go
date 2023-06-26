@@ -179,10 +179,13 @@ func sendData(
 
 	if buildMontreal && len(montrealData) > 0 {
 		err := montrealSender.SendMessage(dtos.JoinerData[dtos.SendableDataMontreal]{
-			IdempotencyKey: metadata.GetIdempotencyKey(),
-			EOF:            metadata.IsEOF(),
-			Data:           montrealData,
-			City:           metadata.GetCity(),
+			ClientID: clientID,
+			Data:     montrealData,
+			City:     metadata.GetCity(),
+			EofData: common.EofData{
+				IdempotencyKey: metadata.GetIdempotencyKey(),
+				EOF:            metadata.IsEOF(),
+			},
 		}, clientID)
 
 		if err != nil {
@@ -192,10 +195,13 @@ func sendData(
 
 	if len(duplicatesData) > 0 {
 		err := duplicatesSender.SendMessage(dtos.JoinerData[dtos.SendableDataDuplicates]{
-			IdempotencyKey: metadata.GetIdempotencyKey(),
-			EOF:            metadata.IsEOF(),
-			Data:           duplicatesData,
-			City:           metadata.GetCity(),
+			ClientID: clientID,
+			Data:     duplicatesData,
+			City:     metadata.GetCity(),
+			EofData: common.EofData{
+				IdempotencyKey: metadata.GetIdempotencyKey(),
+				EOF:            metadata.IsEOF(),
+			},
 		}, clientID)
 
 		if err != nil {
@@ -205,10 +211,13 @@ func sendData(
 
 	if len(rainfallData) > 0 {
 		err := rainfallSender.SendMessage(dtos.JoinerData[dtos.SendableDataRainfall]{
-			IdempotencyKey: metadata.GetIdempotencyKey(),
-			EOF:            metadata.IsEOF(),
-			Data:           rainfallData,
-			City:           metadata.GetCity(),
+			ClientID: clientID,
+			Data:     rainfallData,
+			City:     metadata.GetCity(),
+			EofData: common.EofData{
+				IdempotencyKey: metadata.GetIdempotencyKey(),
+				EOF:            metadata.IsEOF(),
+			},
 		}, clientID)
 
 		if err != nil {

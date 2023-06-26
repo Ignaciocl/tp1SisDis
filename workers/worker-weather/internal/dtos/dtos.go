@@ -1,6 +1,7 @@
 package dtos
 
 import (
+	commons "github.com/Ignaciocl/tp1SisdisCommons"
 	"github.com/Ignaciocl/tp1SisdisCommons/dtos"
 )
 
@@ -14,8 +15,8 @@ type WeatherData struct {
 }
 
 type JoinerData struct {
-	City           string      `json:"city"`
-	Data           WeatherData `json:"weatherData"`
-	IdempotencyKey string      `json:"key"`
-	EOF            bool        `json:"EOF"`
+	City     string      `json:"city"`
+	Data     WeatherData `json:"weatherData"`
+	ClientID string      `json:"key"`
+	commons.EofData
 }

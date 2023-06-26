@@ -1,6 +1,9 @@
 package dtos
 
-import "github.com/Ignaciocl/tp1SisdisCommons/dtos"
+import (
+	commons "github.com/Ignaciocl/tp1SisdisCommons"
+	"github.com/Ignaciocl/tp1SisdisCommons/dtos"
+)
 
 type TripData struct {
 	StartStationCode string  `json:"start_station_code"`
@@ -32,10 +35,10 @@ type SendableDataRainfall struct {
 }
 
 type JoinerData[T any] struct {
-	IdempotencyKey string `json:"key"`
-	City           string `json:"city"`
-	Data           []T    `json:"tripData"`
-	EOF            bool   `json:"EOF"`
+	ClientID string `json:"key"`
+	City     string `json:"city"`
+	Data     []T    `json:"tripData"`
+	commons.EofData
 }
 
 func NewSendableDataMontrealFromTrip(trip TripData) SendableDataMontreal {

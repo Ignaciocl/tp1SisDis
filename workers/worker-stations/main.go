@@ -151,10 +151,13 @@ func main() {
 // sendData sends weather data to the next stage through the given sender
 func sendData(clientID string, stationData dtos.StationData, metadata commonDtos.Metadata, montrealSender, yearSender queue.Sender[dtos.JoinerDataStation]) {
 	dataToSend := dtos.JoinerDataStation{
-		Data:           stationData,
-		City:           metadata.GetCity(),
-		IdempotencyKey: metadata.GetIdempotencyKey(),
-		EOF:            metadata.IsEOF(),
+		Data:     stationData,
+		City:     metadata.GetCity(),
+		ClientID: clientID,
+		EofData: common.EofData{
+			IdempotencyKey: metadata.GetIdempotencyKey(),
+			EOF:            metadata.IsEOF(),
+		},
 	}
 	if dataToSend.City == montrealStation {
 		err := montrealSender.SendMessage(dataToSend, clientID)
