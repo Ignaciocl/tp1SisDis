@@ -35,7 +35,7 @@ func SendMessagesToQueue(data []interface{}, queue queue.Sender[SendableData], c
 		err := queue.SendMessage(SendableData{
 			City: city,
 			Data: v,
-			Key:  "1",
+			ClientID:  "1",
 		}
 		d.EOF = false
 		d.IdempotencyKey = fmt.Sprintf("%s-%d", ik, i)
@@ -195,8 +195,7 @@ func main() {
 	healthCheckerReplier := commonHealthcheck.InitHealthCheckerReplier(serviceName + id)
 	go func() {
 		err := healthCheckerReplier.Run()
-		log.Errorf("healtchecker error: %v", err)
-		panic(err)
+		utils.FailOnError(err, "health check error")
 	}()
 
 	common.WaitForSigterm(gracefulManager)
