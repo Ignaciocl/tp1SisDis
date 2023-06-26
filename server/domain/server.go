@@ -5,21 +5,23 @@ import (
 	"fmt"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
 	"github.com/Ignaciocl/tp1SisdisCommons/client"
+	"github.com/Ignaciocl/tp1SisdisCommons/concurrency"
+	"github.com/Ignaciocl/tp1SisdisCommons/dtos"
 	commonHealthcheck "github.com/Ignaciocl/tp1SisdisCommons/healthcheck"
 	"github.com/Ignaciocl/tp1SisdisCommons/queue"
 	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	log "github.com/sirupsen/logrus"
 	"server/internal/config"
 	"server/internal/dataentities"
+	"strings"
 )
 
 const (
-	serviceName       = "server"
-	userID            = "random"
-	montrealCity      = "montreal"
-	torontoCity       = "toronto"
-	washingtonCity    = "washington"
-	minimumBodyLength = 3
+	serviceName  = "server"
+	userID       = "1" // FIXME: delete this variable later
+	weatherData  = "weather"
+	stationsData = "stations"
+	tripsData    = "trips"
 )
 
 type closer interface {
@@ -84,6 +86,7 @@ func (s *Server) Run() error {
 	defer common.RecoverFromPanic(gracefulManager, "")
 
 	log.Info("waiting for clients")
+
 	// ToDo: if we have time, we can use a semaphore from a library...
 	sem := make(chan struct{}, 1)
 	sem <- struct{}{}
@@ -101,12 +104,12 @@ func (s *Server) Run() error {
 		}
 
 		log.Infof("data received from accumulator: %v", result)
-		dataQuery.WriteQueryValue(result.QueryResult, userID)
+		dataQuery.WriteQueryValue(result.QueryResult, userID) // FIXME: we need the clientID. Nacho
 		utils.LogError(accumulatorInfo.AckMessage(id), "could not ack message")
 	}()
 
-	go s.receivePolling(queryReplierSocket, dataQuery)
 	go s.receiveData(dataReceiverSocket, eofStarter, sender)
+	go s.sendResponses(queryReplierSocket, dataQuery)
 
 	healthCheckerReplier := commonHealthcheck.InitHealthCheckerReplier(serviceName)
 	go func() {
@@ -117,39 +120,74 @@ func (s *Server) Run() error {
 	return nil
 }
 
-// receiveData2 receives data from multiple clients and send it to the distributor
-func (s *Server) receiveData2(receiverSocket client.Client, eofStarter common.Publisher, distributorQueue queue.Sender[dataentities.DataToSend]) {
+// receiveData receives data from multiple clients and send it to the distributor
+func (s *Server) receiveData(receiverSocket client.Client, eofStarter common.Publisher, distributorQueue queue.Sender[dataentities.DataToSend]) {
 	err := receiverSocket.StartListener()
 	if err != nil {
 		log.Error(getLogMessage("error starting listener receiveData", err))
 		panic(err)
 	}
 
-	clientsSemaphore := newSemaphore(s.config.MaxActiveClients)
+	clientsSemaphore := concurrency.NewSemaphore(s.config.MaxActiveClients)
 
 	for {
-		clientsSemaphore.acquire()
+		clientsSemaphore.Acquire()
 		messageHandler, err := receiverSocket.AcceptNewConnections()
 		if err != nil {
 			log.Error(getLogMessage("error accepting new connections in receiveData", err))
-			clientsSemaphore.release()
+			clientsSemaphore.Release()
 			continue
 		}
 
 		go func(messageHandler client.MessageHandler) {
-			defer clientsSemaphore.release()
+			defer clientsSemaphore.Release()
+			defer closeService(messageHandler)
 
 			err = s.handleInputData(messageHandler, eofStarter, distributorQueue)
 			if err != nil {
 				log.Error(getLogMessage("error handling data from client", err))
-				return
+				panic(err)
 			}
 
 			log.Infof("All data from client was processed correctly!")
 		}(messageHandler)
 
 	}
+}
 
+// sendResponses method that sends the responses of the queries to the corresponding client
+func (s *Server) sendResponses(senderSocket client.Client, dataQuery dataentities.DataQuery) {
+	err := senderSocket.StartListener()
+	if err != nil {
+		log.Error(getLogMessage("error starting listener in sendResponses", err))
+		panic(err)
+	}
+
+	clientsSemaphore := concurrency.NewSemaphore(s.config.MaxActiveClients)
+
+	for {
+		clientsSemaphore.Acquire()
+		messageHandler, err := senderSocket.AcceptNewConnections()
+		if err != nil {
+			log.Error(getLogMessage("error accepting new connections in sendResponses", err))
+			clientsSemaphore.Release()
+			continue
+		}
+
+		go func(messageHandler client.MessageHandler) {
+			defer clientsSemaphore.Release()
+			defer closeService(messageHandler)
+
+			err = s.handleSendResponses(messageHandler, dataQuery)
+			if err != nil {
+				log.Error(getLogMessage("error handling data from client", err))
+				panic(err)
+			}
+
+			log.Infof("All data from client was processed correctly!")
+		}(messageHandler)
+
+	}
 }
 
 // handleInputData handles the data that comes from a client, the main function of this method it's to send the data to the next stage
@@ -159,24 +197,151 @@ func (s *Server) handleInputData(messageHandler client.MessageHandler, eofStarte
 		bodyBytes, err := messageHandler.Listen()
 		if err != nil {
 			log.Error(getLogMessage("error reading from socket in handleInputData", err))
-			continue
+			return err
 		}
 
 		message := string(bodyBytes)
+
+		// Receive EOF
 		if utils.Contains[string](message, s.config.InputDataFinMessages) {
-			finMessage := getFINMessage(message)
+			finMessage := utils.GetFINMessage(message)
+			log.Debug(getLogMessage("receive FIN Message: "+finMessage, nil))
+
 			if finMessage == s.config.FinishProcessingMessage {
+				err = s.sendACK(messageHandler)
+				if err != nil {
+					log.Error(getLogMessage("Error sending finish processing ACK", err))
+					return err
+				}
+
 				return nil
 			}
 
-			messageMetadata := getMetadataFromMessage(message)
+			messageMetadata := utils.GetMetadataFromMessage(message)
+			idempotencyKey := getIdempotencyKey(
+				messageMetadata.ClientID,
+				messageMetadata.BatchNumber,
+				messageMetadata.MessageNumber,
+				messageMetadata.DataType,
+				messageMetadata.City,
+			)
+
+			eofData := dtos.NewEOF(
+				idempotencyKey,
+				messageMetadata.City,
+				serviceName,
+				"eof message", // ToDo: refactor, we dont need this
+			)
+
+			eofDataBytes, err := json.Marshal(eofData)
+			if err != nil {
+				log.Error(getLogMessage("error marshaling EOF", err))
+				return err
+			}
+
+			err = eofStarter.Publish(publishingConfig.Exchange, eofDataBytes, publishingConfig.RoutingKey, publishingConfig.Topic)
+			if err != nil {
+				log.Error(getLogMessage("error publishing EOF", err))
+				panic(err)
+			}
+
+			// Send ACK to client
+			err = s.sendACK(messageHandler)
+			if err != nil {
+				log.Error(getLogMessage("error sending ACK of EOF", err))
+				return err
+			}
+
+			continue
+		}
+
+		// Receive data with the following format data1|data2|...|dataN, where data is: clientID,batchNum,smsNum,dataType,city,data1,data2,...,dataN
+		messageMetadata := utils.GetMetadataFromMessage(message)
+		idempotencyKey := getIdempotencyKey(
+			messageMetadata.ClientID,
+			messageMetadata.BatchNumber,
+			messageMetadata.MessageNumber,
+			messageMetadata.DataType,
+			messageMetadata.City,
+		)
+
+		metadata := dtos.NewMetadata(
+			idempotencyKey,
+			false,
+			messageMetadata.City,
+			messageMetadata.DataType,
+			serviceName,
+			"metadata of the raw message",
+		)
+
+		messageSplit := strings.Split(message, s.config.DataDelimiter)
+
+		dataToSend := dataentities.DataToSend{
+			Metadata: metadata,
+			Data:     messageSplit,
+		}
+
+		err = distributorQueue.SendMessage(dataToSend, "") // ToDo: what goes here? NACHO
+		if err != nil {
+			log.Errorf(getLogMessage("error sending data to distributor", err))
+			return err
+		}
+
+		err = s.sendACK(messageHandler)
+		if err != nil {
+			log.Error(getLogMessage("error sending ACK to client", err))
+			return err
+		}
+	}
+}
+
+// handleSendResponses handles the request of the client and sends the response to te queries once it gets all the answers
+func (s *Server) handleSendResponses(messageHandler client.MessageHandler, dataQuery dataentities.DataQuery) error {
+	for {
+		clientRequestBytes, err := messageHandler.Listen() // clientID-getResults
+		if err != nil {
+			log.Error(getLogMessage("error receiving data", err))
+			return err
+		}
+
+		clientRequest := strings.Split(string(clientRequestBytes), "-")
+		clientID := clientRequest[0]
+		action := clientRequest[1]
+
+		if action != "getResults" {
+			return fmt.Errorf("unexpected action. Expected: getResults, got: %s", action)
+		}
+
+		queryData, ok := dataQuery.GetQueryValue(clientID)
+		if !ok {
+			err = messageHandler.Send([]byte("KEEP-ASKING"))
+			if err != nil {
+				log.Error(getLogMessage("error sending keep asking message", err))
+				return err
+			}
+			continue
 
 		}
 
-	}
+		dataMap, err := json.Marshal(queryData)
+		if err != nil {
+			log.Error(getLogMessage("error marshalling query response", err))
+			return err
+		}
 
+		err = messageHandler.Send(dataMap)
+		if err != nil {
+			log.Error(getLogMessage("error sending query response", err))
+			return err
+		}
+
+		log.Infof("Response sent to client with ID %s", clientID)
+		return nil
+	}
 }
 
+/*
+ToDo: DELETE THIS WHEN WE ARE SURE THAT ALL WORKS
 func (s *Server) receiveData(client client.Client, eofStarter common.Publisher, queue queue.Sender[dataentities.DataToSend]) {
 	err := client.StartListener()
 	if err != nil {
@@ -320,6 +485,17 @@ func (s *Server) receivePolling(pollingSocket client.Client, dataQuery dataentit
 			break
 		}
 	}
+}*/
+
+// sendACK sends an ACK though the given message handler
+func (s *Server) sendACK(messageHandler client.MessageHandler) error {
+	ack := []byte(s.config.ACKMessage)
+	err := messageHandler.Send(ack)
+	if err != nil {
+		return fmt.Errorf("error sending ACK: %v", err)
+	}
+
+	return nil
 }
 
 // closeService close the given service. If an error occurs it will  be logged
@@ -337,4 +513,17 @@ func getLogMessage(message string, err error) string {
 	}
 
 	return fmt.Sprintf("[service: %s][status: OK] %s", serviceName, message)
+}
+
+// getIdempotencyKey returns the idempotency key based on the given parameters
+func getIdempotencyKey(clientID string, batchNumber string, messageNumber string, dataType string, city string) string {
+	/*switch dataType {
+	case weatherData, stationsData:
+		return fmt.Sprintf("%s-%s-%s-%s", clientID, batchNumber, messageNumber, city)
+	case tripsData:
+		return fmt.Sprintf("%s-%s-%s", clientID, batchNumber, city)
+	default:
+		panic("invalid data type")
+	}*/
+	return fmt.Sprintf("%s-%s-%s", clientID, batchNumber, city)
 }
