@@ -18,6 +18,7 @@ const (
 	yearIdx            = 9
 )
 
+// Transform transforms raw station data into Station Data
 func Transform(rawStationData string) (*dtos.StationData, error) {
 	dataSplit := strings.Split(rawStationData, dataFieldDelimiter)
 
