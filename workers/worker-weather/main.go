@@ -85,7 +85,6 @@ func main() {
 			metadata := data.Metadata
 
 			if metadata.IsEOF() {
-				// ToDo: nacho que va aca?
 				iqEOF.AnswerEofOk(metadata.GetIdempotencyKey(), nil)
 				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 				continue

@@ -270,7 +270,7 @@ func (s *Server) handleInputData(messageHandler client.MessageHandler, eofStarte
 			Data:     messageSplit,
 		}
 
-		err = distributorQueue.SendMessage(dataToSend, "") // ToDo: what goes here? NACHO
+		err = distributorQueue.SendMessage(dataToSend, "")
 		if err != nil {
 			log.Errorf(getLogMessage("error sending data to distributor", err))
 			return err
