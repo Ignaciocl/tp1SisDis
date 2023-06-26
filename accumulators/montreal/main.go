@@ -2,8 +2,8 @@ package main
 
 import (
 	common "github.com/Ignaciocl/tp1SisdisCommons"
-	commonHealthcheck "github.com/Ignaciocl/tp1SisdisCommons/healthcheck"
 	"github.com/Ignaciocl/tp1SisdisCommons/fileManager"
+	commonHealthcheck "github.com/Ignaciocl/tp1SisdisCommons/healthcheck"
 	"github.com/Ignaciocl/tp1SisdisCommons/keyChecker"
 	"github.com/Ignaciocl/tp1SisdisCommons/queue"
 	"github.com/Ignaciocl/tp1SisdisCommons/utils"
@@ -12,7 +12,11 @@ import (
 	"strconv"
 )
 
-const serviceName = "accumulator-montreal"
+const (
+	serviceName        = "accumulator-montreal"
+	storageFilename    = "montreal_accumulator.csv"
+	eofStorageFilename = "eof.csv"
+)
 
 type AccumulatorData struct {
 	EndingStation string  `json:"ending_station"`
@@ -25,7 +29,7 @@ type AccumulatorInfo struct {
 }
 
 type Accumulator struct {
-	Key      string   `json:"key"`
+	ClientID string   `json:"client_id"`
 	Stations []string `json:"stations"`
 	common.EofData
 }
@@ -47,10 +51,10 @@ func main() {
 	id := os.Getenv("id")
 	amountCalc, err := strconv.Atoi(os.Getenv("calculators"))
 	utils.FailOnError(err, "missing env value of calculator")
-	db, err := fileManager.CreateDB[*dStation](t{}, "cambiameAcaLicha", 300, Sep)
+	db, err := fileManager.CreateDB[*dStation](t{}, storageFilename, 300, Sep)
 	utils.FailOnError(err, "could not create db")
 	acc := make(map[string]dStation)
-	eofDb, err := fileManager.CreateDB[*eofData](t2{}, "cambiameAcaLichaEOF", 300, Sep)
+	eofDb, err := fileManager.CreateDB[*eofData](t2{}, eofStorageFilename, 300, Sep)
 	ik, err := keyChecker.CreateIdempotencyChecker(20)
 	utils.FailOnError(err, "could not create db")
 	inputQueue, _ := queue.InitializeReceiver[AccumulatorInfo]("preAccumulatorMontreal", "rabbit", id, "", nil)

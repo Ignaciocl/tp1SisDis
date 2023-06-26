@@ -15,7 +15,10 @@ import (
 	"strings"
 )
 
-const serviceName = "joiner-montreal"
+const (
+	storageFilename = "montreal_joiner.csv"
+	serviceName     = "joiner-montreal"
+)
 
 type AccumulatorInfo struct {
 	Data []AccumulatorData `json:"data"`
@@ -87,7 +90,7 @@ func main() {
 	utils.FailOnError(err, "missing env value of worker trips")
 	id := os.Getenv("id")
 	acc := make(map[string]sData)
-	csvReader, err := fileManager.CreateCSVFileManager[JoinerDataStation](transformer{}, "ponemeElNombreLicha.csv")
+	csvReader, err := fileManager.CreateCSVFileManager[JoinerDataStation](transformer{}, storageFilename)
 	utils.FailOnError(err, "could not load csv file")
 	tt := make(chan struct{}, 1)
 	st := make(chan struct{}, 1)

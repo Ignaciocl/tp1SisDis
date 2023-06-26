@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
-	commonHealthcheck "github.com/Ignaciocl/tp1SisdisCommons/healthcheck"
 	"github.com/Ignaciocl/tp1SisdisCommons/fileManager"
+	commonHealthcheck "github.com/Ignaciocl/tp1SisdisCommons/healthcheck"
 	"github.com/Ignaciocl/tp1SisdisCommons/queue"
 	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	"github.com/pkg/errors"
@@ -15,7 +15,10 @@ import (
 	"strings"
 )
 
-const serviceName = "joiner-stations"
+const (
+	serviceName     = "joiner-stations"
+	storageFilename = "stations_joiner.csv"
+)
 
 func (s *stationAlive) shouldBeConsidered() bool {
 	return s.wasAliveOn16 && s.wasAliveOn17
@@ -88,9 +91,9 @@ func processDataTrips(data JoinerDataStation, w *mapHolder, aq queue.Sender[PreA
 			})
 		}
 		aq.SendMessage(PreAccumulatorData{
-			Data:    v,
-			Key:     data.IdempotencyKey,
-			EofData: common.EofData{IdempotencyKey: data.IdempotencyKey},
+			Data:     v,
+			ClientID: data.ClientID,
+			EofData:  common.EofData{IdempotencyKey: data.IdempotencyKey},
 		}, id)
 	}
 }
@@ -113,7 +116,7 @@ func main() {
 	utils.FailOnError(err, "missing env value of worker stations")
 	workerTrips, err := strconv.Atoi(os.Getenv("amountTripsWorkers"))
 	utils.FailOnError(err, "missing env value of worker trips")
-	csvReader, err := fileManager.CreateCSVFileManager[JoinerDataStation](transformer{}, "ponemeElNombreLicha.csv")
+	csvReader, err := fileManager.CreateCSVFileManager[JoinerDataStation](transformer{}, storageFilename)
 	utils.FailOnError(err, "could not load csv file")
 	acc := map[string]stationData{}
 	tt := make(chan struct{}, 1)

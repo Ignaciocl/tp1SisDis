@@ -4,8 +4,8 @@ import (
 	"errors"
 	"fmt"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
-	commonHealthcheck "github.com/Ignaciocl/tp1SisdisCommons/healthcheck"
 	"github.com/Ignaciocl/tp1SisdisCommons/fileManager"
+	commonHealthcheck "github.com/Ignaciocl/tp1SisdisCommons/healthcheck"
 	"github.com/Ignaciocl/tp1SisdisCommons/keyChecker"
 	"github.com/Ignaciocl/tp1SisdisCommons/queue"
 	"github.com/Ignaciocl/tp1SisdisCommons/utils"
@@ -14,7 +14,11 @@ import (
 	"os"
 )
 
-const serviceName = "accumulator-stations"
+const (
+	serviceName        = "accumulator-stations"
+	storageFilename    = "stations_accumulator.csv"
+	eofStorageFilename = "eof.csv"
+)
 
 type ReceivableDataStation struct {
 	Name string `json:"name"`
@@ -28,7 +32,7 @@ type JoinerDataStation struct {
 
 type AccumulatorData struct {
 	AvgStations []string `json:"avg_stations"`
-	Key         string   `json:"key"`
+	ClientID    string   `json:"client_id"`
 	common.EofData
 }
 
@@ -79,7 +83,7 @@ func (a actionable) DoActionIfEOF() {
 	}
 	l := AccumulatorData{
 		AvgStations: v,
-		Key:         a.id,
+		ClientID:    a.id,
 		EofData: common.EofData{
 			IdempotencyKey: fmt.Sprintf("key:%s-amount:%d", a.id, len(savedData)),
 		},
@@ -91,10 +95,10 @@ func (a actionable) DoActionIfEOF() {
 
 func main() {
 	id := os.Getenv("id")
-	db, err := fileManager.CreateDB[*stationData](t{}, "cambiameAcaLicha", 300, Sep)
+	db, err := fileManager.CreateDB[*stationData](t{}, storageFilename, 300, Sep)
 	utils.FailOnError(err, "could not create db")
 	acc := map[string]stationData{}
-	eofDb, err := fileManager.CreateDB[*eofData](t2{}, "cambiameAcaLichaEOF", 300, Sep)
+	eofDb, err := fileManager.CreateDB[*eofData](t2{}, eofStorageFilename, 300, Sep)
 	ik, err := keyChecker.CreateIdempotencyChecker(20)
 	utils.FailOnError(err, "could not create db")
 	inputQueue, _ := queue.InitializeReceiver[JoinerDataStation]("preAccumulatorSt", "rabbit", id, "", nil)

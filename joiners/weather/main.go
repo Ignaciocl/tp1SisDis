@@ -14,7 +14,10 @@ import (
 	"strings"
 )
 
-const serviceName = "joiner-weather"
+const (
+	serviceName     = "joiner-weather"
+	storageFilename = "weather_joiner.csv"
+)
 
 func (sd *weatherDuration) add(duration int) {
 	sd.total += 1
@@ -82,7 +85,7 @@ func main() {
 	utils.FailOnError(err, "missing env value of worker stations")
 	workerTrips, err := strconv.Atoi(os.Getenv("amountTripsWorkers"))
 	utils.FailOnError(err, "missing env value of worker trips")
-	csvReader, err := fileManager.CreateCSVFileManager[JoinerDataStation](transformer{}, "ponemeElNombreLicha.csv")
+	csvReader, err := fileManager.CreateCSVFileManager[JoinerDataStation](transformer{}, storageFilename)
 	utils.FailOnError(err, "could not load csv file")
 	acc := make(map[string]weatherDuration)
 	tripTurn := make(chan struct{}, 1)
