@@ -314,7 +314,7 @@ func (s *Server) handleSendResponses(messageHandler client.MessageHandler, dataQ
 
 		queryData, ok := dataQuery.GetQueryValue(clientID)
 		if !ok {
-			err = messageHandler.Send([]byte("KEEP-ASKING"))
+			err = messageHandler.Send([]byte("KEEP-ASKING")) // ToDo: add value in config file
 			if err != nil {
 				log.Error(getLogMessage("error sending keep asking message", err))
 				return err

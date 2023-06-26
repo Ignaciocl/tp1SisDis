@@ -19,7 +19,7 @@ const (
 	tripsFile    = "trips"
 	weatherFile  = "weather"
 	stationsFile = "stations"
-	queryStr     = "query"
+	finishKey    = "finish"
 )
 
 var (
@@ -28,26 +28,28 @@ var (
 )
 
 type ClientConfig struct {
-	BatchSize             int               `yaml:"batch_size"`
-	FinMarker             string            `yaml:"fin_marker"`
-	FinACKMessages        map[string]string `yaml:"fin_ack_messages"`
-	ServerACK             string            `yaml:"server_ack"`
-	ServerAddress         string            `yaml:"server_address"`
-	ServerResponseAddress string            `yaml:"server_response_address"`
-	PacketLimit           int               `yaml:"packet_limit"`
-	CSVDelimiter          string            `yaml:"csv_delimiter"`
-	DataDelimiter         string            `yaml:"data_delimiter"`
-	EndBatchMarker        string            `yaml:"end_batch_marker"`
-	Protocol              string            `yaml:"protocol"`
-	GetResponsesMessage   string            `yaml:"get_response_message"`
-	MaxConnectionRetries  int               `yaml:"max_connection_retries"`
-	RetryDelay            time.Duration     `yaml:"retry_delay"`
-	TestMode              bool
+	Protocol              string        `yaml:"protocol"`
+	ServerAddress         string        `yaml:"server_address"`
+	ServerResponseAddress string        `yaml:"server_response_address"`
+	PacketLimit           int           `yaml:"packet_limit"`
+	MaxConnectionRetries  int           `yaml:"max_connection_retries"`
+	RetryDelay            time.Duration `yaml:"retry_delay"`
+
+	BatchSize     int    `yaml:"batch_size"`
+	ServerACK     string `yaml:"server_ack"`
+	CSVDelimiter  string `yaml:"csv_delimiter"`
+	DataDelimiter string `yaml:"data_delimiter"`
+
+	FinACKMessages      map[string]string `yaml:"fin_ack_messages"`
+	QueryResultsMessage string            `yaml:"query_results_message"`
+	KeepAskingResponse  string            `yaml:"keep_asking_response"`
+	TestMode            bool
 }
 
 type Client struct {
 	ID             string
 	messageCounter int
+	batchCounter   int
 	config         ClientConfig
 	senderSocket   commons.Client
 	receiverSocket commons.Client
@@ -148,6 +150,11 @@ func (c *Client) SendData() error {
 		return err
 	}
 
+	err = c.sendFinMessage(finishKey)
+	if err != nil {
+		return err
+	}
+
 	log.Infof("All data from client %s was sent correctly", c.ID)
 	return nil
 }
@@ -215,10 +222,9 @@ func (c *Client) sendTripsData() error {
 // GetResponses asks for the response of the queries
 func (c *Client) GetResponses() error {
 	var responseStr string
+	getResultsMessage := fmt.Sprintf("%s-%s", c.ID, c.config.QueryResultsMessage)
 
-	finMessageMarker := c.config.FinACKMessages[queryStr]
-
-	messageBytes := []byte(c.config.GetResponsesMessage)
+	messageBytes := []byte(getResultsMessage)
 	for {
 		err := c.receiverSocket.Send(messageBytes)
 
@@ -251,7 +257,7 @@ func (c *Client) GetResponses() error {
 		}
 
 		responseStr = string(response)
-		if strings.Contains(responseStr, finMessageMarker) {
+		if responseStr != c.config.KeepAskingResponse {
 			break
 		}
 
@@ -284,16 +290,15 @@ func (c *Client) sendDataFromFile(filepath string, city string, data string) err
 	_ = fileScanner.Scan() // Dismiss first line of the csv
 
 	batchDataCounter := 0 // to know if the batch is full or not
-	batchesSent := 0      // for debugging
 
 	var dataToSend []string
 	for fileScanner.Scan() {
 		if batchDataCounter == c.config.BatchSize {
-			batchesSent += 1
-			log.Debugf("[clientID: %s][city: %s][data: %s] Sending batch number %v", c.ID, city, data, batchesSent)
+			c.batchCounter += 1
+			log.Debugf("[clientID: %s][city: %s][data: %s] Sending batch number %v", c.ID, city, data, c.batchCounter)
 			err = c.sendBatch(dataToSend)
 			if err != nil {
-				log.Errorf("[clientID: %s][city: %s][data: %s] error sending batch number %v: %s", c.ID, city, data, batchesSent, err.Error())
+				log.Errorf("[clientID: %s][city: %s][data: %s] error sending batch number %v: %s", c.ID, city, data, c.batchCounter, err.Error())
 				return err
 			}
 
@@ -314,10 +319,11 @@ func (c *Client) sendDataFromFile(filepath string, city string, data string) err
 	}
 
 	if len(dataToSend) != 0 {
-		log.Debugf("[clientID: %s][city: %s][data: %s] Sending batch number %v", c.ID, city, data, batchesSent+1)
+		c.batchCounter += 1
+		log.Debugf("[clientID: %s][city: %s][data: %s] Sending batch number %v", c.ID, city, data, c.batchCounter)
 		err = c.sendBatch(dataToSend)
 		if err != nil {
-			log.Errorf("[clientID: %s][city: %s][data: %s] error sending batch number %v: %s", c.ID, city, data, batchesSent, err.Error())
+			log.Errorf("[clientID: %s][city: %s][data: %s] error sending batch number %v: %s", c.ID, city, data, c.batchCounter, err.Error())
 			return err
 		}
 	}
@@ -381,9 +387,8 @@ func (c *Client) sendFinMessage(dataType string) error {
 func (c *Client) sendBatch(batch []string) error {
 	debugCity := strings.SplitN(batch[0], ",", 6)[3]
 
-	// Join data with |, e.g data1|data2|data3|..., eg of data: clientID,messageNum,dataType,city,weatherField1,weatherField2,...
+	// Join data with |, e.g data1|data2|data3|...|dataN eg of data: clientID,messageNum,dataType,city,weatherField1,weatherField2,...
 	dataJoined := strings.Join(batch, c.config.DataDelimiter)
-	dataJoined = dataJoined + c.config.DataDelimiter + c.config.EndBatchMarker // the message to send has the following format: data1|data2|data3|...|dataN|PING
 	dataJoinedBytes := []byte(dataJoined)
 
 	for {
@@ -439,10 +444,11 @@ func (c *Client) getFilePath(city string, filename string) string {
 
 // transformDataToSend transforms the data from the file adding the following info:
 // + ID: id of the client
+// + Batch number: number of the batch sent
 // + Message number: the number of the message
 // + Data type: could be weather, trips or stations
 // + City: city which this data belongs
 func (c *Client) transformDataToSend(dataType string, city string, originalData string) string {
-	extraData := fmt.Sprintf("%s,%v,%s,%s", c.ID, c.messageCounter, dataType, city)
+	extraData := fmt.Sprintf("%s,%v,%v,%s,%s", c.ID, c.batchCounter, c.messageCounter, dataType, city)
 	return extraData + c.config.CSVDelimiter + originalData
 }
