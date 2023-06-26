@@ -8,6 +8,14 @@ type FileData struct {
 	Data []interface{} `json:"data"`
 }
 
+// Para mi puede mandar la data normal, onda rawData:
+/*
+type DataToSend struct {
+	Metadata commons.Metadata `json:"metadata"`
+	RawData []string `json:"raw_data"`
+}
+*/
+
 type DataToSend struct {
 	File           string        `json:"file,omitempty"`
 	Data           []interface{} `json:"data,omitempty"`

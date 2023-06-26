@@ -20,6 +20,7 @@ type Station struct {
 	Longitude string `json:"longitude"`
 }
 
+// Va a recibir ahora Metadata y un array de strings a transformar en lo que ya sabesmos
 type WorkerStation struct {
 	City string  `json:"city"`
 	Data Station `json:"data,omitempty"`

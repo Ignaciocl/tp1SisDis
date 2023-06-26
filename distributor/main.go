@@ -12,12 +12,35 @@ import (
 
 const serviceName = "distributor"
 
+/*
+La tuneas por la otra que tiene Metadata
+
+type DataToSend struct {
+	Metadata commons.Metadata `json:"metadata"`
+	RawData []string `json:"raw_data"`
+}
+
+
+*/
+
 type receivedData struct {
 	File string        `json:"file"`
 	Data []interface{} `json:"data"`
 	City string        `json:"city,omitempty"`
 	common.EofData
 }
+
+/*
+
+Es mas, lo reemplazaría por solo un elemento que tiene toda la data atroden
+
+
+type SendableData struct {
+	Metadata commons.Metadata      `json:"metadata"`
+	RawData []string `json:"raw_data,omitempty"` // Why would i decompress here? it is just a distributor
+}
+
+*/
 
 type SendableData struct {
 	City string      `json:"city"`
@@ -50,7 +73,7 @@ func SendMessagesToQueue(data []interface{}, queue queue.Sender[SendableData], c
 func main() {
 	id := os.Getenv("id")
 	inputQueue, _ := queue.InitializeReceiver[receivedData]("distributor", "rabbit", id, "", nil)
-	wq, _ := queue.InitializeSender[SendableData]("weatherWorkers", 3, nil, "rabbit")
+	wq, _ := queue.InitializeSender[SendableData]("weatherWorkers", 3, nil, "rabbit") // refactor: mandar siempre batches
 	tq, _ := queue.InitializeSender[SendableDataTrip]("tripWorkers", 3, nil, "rabbit")
 	sq, _ := queue.InitializeSender[SendableData]("stationWorkers", 3, nil, "rabbit")
 	wqe, _ := common.CreateConsumerEOF([]common.NextToNotify{{Name: "weatherWorkers", Connection: wq}}, "distributor", inputQueue, 1)
@@ -100,7 +123,7 @@ func main() {
 					sender = sq
 				}
 			}
-			if pFile == "trips" {
+			if pFile == "trips" { // reemplazar por constantes o algo por el estilo
 				tq.SendMessage(SendableDataTrip{
 					City: data.City,
 					Data: data.Data,
