@@ -163,7 +163,6 @@ func main() {
 
 				log.Infof("eof received and distributed for %v", data)
 
-				// FIXME: no se que tiene que ir aca NACHO
 				eofManager.AnswerEofOk(metadata.IdempotencyKey, nil)
 				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 				continue
@@ -184,21 +183,10 @@ func main() {
 
 			err = sender.SendMessage(data, "")
 			if err != nil {
-				log.Errorf("error sending message: %v", err)
-				panic(err)
+				utils.LogError(err, "error sending message to worker")
 			}
 
-			/*if pFile == "trips" { // reemplazar por constantes o algo por el estilo
-				tq.SendMessage(SendableDataTrip{
-					City: data.City,
-					Data: data.Data,
-					Key:  "random", // esto creo que es el user, CREO. NACHO que mierda va aca
-					EOF:  false,
-				}, "")
-				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
-				continue
-			}
-			utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")*/
+			utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 		}
 	}()
 

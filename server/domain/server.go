@@ -17,11 +17,8 @@ import (
 )
 
 const (
-	serviceName  = "server"
-	userID       = "1" // FIXME: delete this variable later
-	weatherData  = "weather"
-	stationsData = "stations"
-	tripsData    = "trips"
+	serviceName = "server"
+	userID      = "1" // FIXME: delete this variable later
 )
 
 type closer interface {
@@ -218,16 +215,10 @@ func (s *Server) handleInputData(messageHandler client.MessageHandler, eofStarte
 			}
 
 			messageMetadata := utils.GetMetadataFromMessage(message)
-			idempotencyKey := getIdempotencyKey(
-				messageMetadata.ClientID,
-				messageMetadata.BatchNumber,
-				messageMetadata.MessageNumber,
-				messageMetadata.DataType,
-				messageMetadata.City,
-			)
+			eofIdempotencyKey := fmt.Sprintf("%s-%s-%s", messageMetadata.City, messageMetadata.DataType, messageMetadata.ClientID)
 
 			eofData := dtos.NewEOF(
-				idempotencyKey,
+				eofIdempotencyKey,
 				messageMetadata.City,
 				serviceName,
 				"eof message", // ToDo: refactor, we dont need this
@@ -260,8 +251,6 @@ func (s *Server) handleInputData(messageHandler client.MessageHandler, eofStarte
 		idempotencyKey := getIdempotencyKey(
 			messageMetadata.ClientID,
 			messageMetadata.BatchNumber,
-			messageMetadata.MessageNumber,
-			messageMetadata.DataType,
 			messageMetadata.City,
 		)
 
@@ -516,14 +505,6 @@ func getLogMessage(message string, err error) string {
 }
 
 // getIdempotencyKey returns the idempotency key based on the given parameters
-func getIdempotencyKey(clientID string, batchNumber string, messageNumber string, dataType string, city string) string {
-	/*switch dataType {
-	case weatherData, stationsData:
-		return fmt.Sprintf("%s-%s-%s-%s", clientID, batchNumber, messageNumber, city)
-	case tripsData:
-		return fmt.Sprintf("%s-%s-%s", clientID, batchNumber, city)
-	default:
-		panic("invalid data type")
-	}*/
+func getIdempotencyKey(clientID string, batchNumber string, city string) string {
 	return fmt.Sprintf("%s-%s-%s", clientID, batchNumber, city)
 }
