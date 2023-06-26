@@ -38,21 +38,22 @@ func NewServer(config *config.ServerConfig) *Server {
 
 func (s *Server) Run() error {
 	// Initialize clients
-	nodeAddress := fmt.Sprintf("%s:%v", serviceName, s.config.InputPort)
-	pollingAddress := fmt.Sprintf("%s:%v", serviceName, s.config.OutputPort)
-	clientSocket := client.NewSocket(client.NewSocketConfig(
-		s.config.Protocol,
-		nodeAddress,
-		s.config.PacketLimit,
-	))
-	defer closeService(clientSocket)
+	inputDataAddress := fmt.Sprintf("%s:%v", serviceName, s.config.InputPort)
+	outputDataAddress := fmt.Sprintf("%s:%v", serviceName, s.config.OutputPort)
 
-	pollingSocket := client.NewSocket(client.NewSocketConfig(
+	dataReceiverSocket := client.NewSocket(client.NewSocketConfig(
 		s.config.Protocol,
-		pollingAddress,
+		inputDataAddress,
 		s.config.PacketLimit,
 	))
-	defer closeService(pollingSocket)
+	defer closeService(dataReceiverSocket)
+
+	queryReplierSocket := client.NewSocket(client.NewSocketConfig(
+		s.config.Protocol,
+		outputDataAddress,
+		s.config.PacketLimit,
+	))
+	defer closeService(queryReplierSocket)
 
 	// Initialize queues and others
 	senderConfig := s.config.Sender
@@ -104,8 +105,8 @@ func (s *Server) Run() error {
 		utils.LogError(accumulatorInfo.AckMessage(id), "could not ack message")
 	}()
 
-	go s.receivePolling(pollingSocket, dataQuery)
-	go s.receiveData(clientSocket, eofStarter, sender)
+	go s.receivePolling(queryReplierSocket, dataQuery)
+	go s.receiveData(dataReceiverSocket, eofStarter, sender)
 
 	healthCheckerReplier := commonHealthcheck.InitHealthCheckerReplier(serviceName)
 	go func() {
@@ -114,6 +115,66 @@ func (s *Server) Run() error {
 	}()
 	common.WaitForSigterm(gracefulManager)
 	return nil
+}
+
+// receiveData2 receives data from multiple clients and send it to the distributor
+func (s *Server) receiveData2(receiverSocket client.Client, eofStarter common.Publisher, distributorQueue queue.Sender[dataentities.DataToSend]) {
+	err := receiverSocket.StartListener()
+	if err != nil {
+		log.Error(getLogMessage("error starting listener receiveData", err))
+		panic(err)
+	}
+
+	clientsSemaphore := newSemaphore(s.config.MaxActiveClients)
+
+	for {
+		clientsSemaphore.acquire()
+		messageHandler, err := receiverSocket.AcceptNewConnections()
+		if err != nil {
+			log.Error(getLogMessage("error accepting new connections in receiveData", err))
+			clientsSemaphore.release()
+			continue
+		}
+
+		go func(messageHandler client.MessageHandler) {
+			defer clientsSemaphore.release()
+
+			err = s.handleInputData(messageHandler, eofStarter, distributorQueue)
+			if err != nil {
+				log.Error(getLogMessage("error handling data from client", err))
+				return
+			}
+
+			log.Infof("All data from client was processed correctly!")
+		}(messageHandler)
+
+	}
+
+}
+
+// handleInputData handles the data that comes from a client, the main function of this method it's to send the data to the next stage
+func (s *Server) handleInputData(messageHandler client.MessageHandler, eofStarter common.Publisher, distributorQueue queue.Sender[dataentities.DataToSend]) error {
+	publishingConfig := s.config.Publisher
+	for {
+		bodyBytes, err := messageHandler.Listen()
+		if err != nil {
+			log.Error(getLogMessage("error reading from socket in handleInputData", err))
+			continue
+		}
+
+		message := string(bodyBytes)
+		if utils.Contains[string](message, s.config.InputDataFinMessages) {
+			finMessage := getFINMessage(message)
+			if finMessage == s.config.FinishProcessingMessage {
+				return nil
+			}
+
+			messageMetadata := getMetadataFromMessage(message)
+
+		}
+
+	}
+
 }
 
 func (s *Server) receiveData(client client.Client, eofStarter common.Publisher, queue queue.Sender[dataentities.DataToSend]) {
@@ -129,8 +190,8 @@ func (s *Server) receiveData(client client.Client, eofStarter common.Publisher, 
 		panic(err)
 	}
 
-	eofAmount := 0
-	city := montrealCity
+	eofAmount := 0       // tampoco
+	city := montrealCity // Esto ya no necesitamos, sale de la data
 	publishingConfig := s.config.Publisher
 	for {
 		bodyBytes, err := messageHandler.Listen()
@@ -140,6 +201,7 @@ func (s *Server) receiveData(client client.Client, eofStarter common.Publisher, 
 		}
 		var data dataentities.FileData
 
+		// Sanity-check
 		if len(bodyBytes) < minimumBodyLength {
 			continue
 		}
@@ -147,9 +209,10 @@ func (s *Server) receiveData(client client.Client, eofStarter common.Publisher, 
 		if err := json.Unmarshal(bodyBytes, &data); err != nil {
 			utils.FailOnError(err, fmt.Sprintf("error while receiving data for file: %v", string(bodyBytes)))
 			continue
-		}
-		if data.EOF != nil && *data.EOF {
-			d, err := json.Marshal(common.EofData{
+		} // esto no hay que hacer, hay que sacar los campos del string para saber que es
+
+		if data.EOF != nil && *data.EOF { // preguntamos si tiene la data de eof
+			d, err := json.Marshal(common.EofData{ // Llamamos al constructor de EOF que tiene metadata y esas cosas
 				EOF:            true,
 				IdempotencyKey: fmt.Sprintf("%s-%s", city, data.File),
 			})
@@ -166,12 +229,13 @@ func (s *Server) receiveData(client client.Client, eofStarter common.Publisher, 
 				panic(err)
 			}
 
-			err = messageHandler.Send([]byte(s.config.FinishProcessingMessage))
+			err = messageHandler.Send([]byte(s.config.FinishProcessingMessage)) // Creo que es el ACK de haber leido x file
 			if err != nil {
 				log.Error(getLogMessage("error sending finish processing message", err))
 				panic(err)
 			}
 
+			// Todo esto puede volar, quizas el contador no
 			eofAmount += 1
 			if eofAmount == 3 {
 				city = torontoCity

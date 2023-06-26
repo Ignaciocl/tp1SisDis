@@ -15,10 +15,12 @@ type ServerConfig struct {
 	PacketLimit             int             `yaml:"packet_limit"`
 	ConnectionString        string          `yaml:"connection_string"`
 	KeepTryingMessage       string          `yaml:"keep_trying_message"`
-	FinishProcessingMessage string          `yaml:"finish_processing_message"`
+	MaxActiveClients        int             `yaml:"max_active_clients"`
 	Sender                  SenderConfig    `yaml:"sender_config"`
 	Receiver                ReceiverConfig  `yaml:"receiver_config"`
 	Publisher               PublisherConfig `yaml:"publisher_config"`
+	InputDataFinMessages    []string        `yaml:"input_data_fin_messages"`
+	FinishProcessingMessage string          `yaml:"finish_processing_message"`
 }
 
 type SenderConfig struct {
