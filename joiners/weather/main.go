@@ -2,8 +2,8 @@ package main
 
 import (
 	common "github.com/Ignaciocl/tp1SisdisCommons"
-	commonHealthcheck "github.com/Ignaciocl/tp1SisdisCommons/healthcheck"
 	"github.com/Ignaciocl/tp1SisdisCommons/fileManager"
+	commonHealthcheck "github.com/Ignaciocl/tp1SisdisCommons/healthcheck"
 	"github.com/Ignaciocl/tp1SisdisCommons/queue"
 	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	"github.com/pkg/errors"
@@ -171,6 +171,12 @@ func main() {
 			tripTurn <- s
 		}
 	}() // For trip
+
+	healthCheckReplier := commonHealthcheck.InitHealthCheckerReplier(serviceName)
+	go func() {
+		err := healthCheckReplier.Run()
+		utils.LogError(err, "healtchecker error")
+	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
 	common.WaitForSigterm(grace)
