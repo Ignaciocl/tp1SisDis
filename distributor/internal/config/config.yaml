@@ -1,0 +1,8 @@
+connection_string: 'rabbit'
+worker_queues:
+  trips: 'tripWorkers'
+  weather: 'weatherWorkers'
+  stations: 'stationWorkers'
+
+max_amount_receivers: 3
+necessary_amount: 1
