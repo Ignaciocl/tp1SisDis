@@ -18,10 +18,10 @@ import (
 )
 
 const (
+	idEnvVar         = "id"
 	logLevelEnvVar   = "LOG_LEVEL"
-	defaultLogLevel  = "DEBUG"
+	defaultLogLevel  = "INFO"
 	serviceName      = "worker-weather"
-	dateLayout       = "2006-01-02"
 	connectionString = "rabbit"
 )
 
@@ -53,7 +53,7 @@ func main() {
 		panic(fmt.Sprintf("error initializing logger: %v", err))
 	}
 
-	id := os.Getenv("id")
+	id := os.Getenv(idEnvVar)
 	if id == "" {
 		panic("missing weather worker id")
 	}
@@ -132,7 +132,7 @@ func main() {
 	healthCheckerReplier := commonHealthcheck.InitHealthCheckerReplier(serviceName + id)
 	go func() {
 		err := healthCheckerReplier.Run()
-		log.Errorf("healtchecker error: %v", err)
+		utils.FailOnError(err, "healtchecker error")
 	}()
 
 	log.Info(" [*] Waiting for messages. To exit press CTRL+C")
