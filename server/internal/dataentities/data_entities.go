@@ -1,26 +1,13 @@
 package dataentities
 
-import log "github.com/sirupsen/logrus"
-
-type FileData struct {
-	EOF  *bool         `json:"eof"`
-	File string        `json:"file"`
-	Data []interface{} `json:"data"`
-}
-
-// Para mi puede mandar la data normal, onda rawData:
-/*
-type DataToSend struct {
-	Metadata commons.Metadata `json:"metadata"`
-	RawData []string `json:"raw_data"`
-}
-*/
+import (
+	"github.com/Ignaciocl/tp1SisdisCommons/dtos"
+	log "github.com/sirupsen/logrus"
+)
 
 type DataToSend struct {
-	File           string        `json:"file,omitempty"`
-	Data           []interface{} `json:"data,omitempty"`
-	City           string        `json:"city,omitempty"`
-	IdempotencyKey string        `json:"idempotencyKey"`
+	Metadata dtos.Metadata `json:"metadata"`
+	Data     []string      `json:"data,omitempty"`
 }
 
 type AccumulatorData struct {

@@ -21,6 +21,8 @@ type ServerConfig struct {
 	Publisher               PublisherConfig `yaml:"publisher_config"`
 	InputDataFinMessages    []string        `yaml:"input_data_fin_messages"`
 	FinishProcessingMessage string          `yaml:"finish_processing_message"`
+	ACKMessage              string          `yaml:"ack_message"`
+	DataDelimiter           string          `yaml:"data_delimiter"`
 }
 
 type SenderConfig struct {

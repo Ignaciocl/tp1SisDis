@@ -14,6 +14,7 @@ input_data_fin_messages:
 finish_processing_message: 'FIN-processing'
 
 ack_message: "PONG"
+data_delimiter: "|"
 
 connection_string: 'rabbit'
 keep_trying_message: '{"continue": true}'
