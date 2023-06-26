@@ -178,7 +178,7 @@ func main() {
 	healthCheckReplier := commonHealthcheck.InitHealthCheckerReplier(serviceName)
 	go func() {
 		err := healthCheckReplier.Run()
-		utils.LogError(err, "healtchecker error")
+		utils.FailOnError(err, "health check error")
 	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")

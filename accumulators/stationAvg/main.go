@@ -146,7 +146,7 @@ func main() {
 	healthCheckerReplier := commonHealthcheck.InitHealthCheckerReplier(serviceName)
 	go func() {
 		err := healthCheckerReplier.Run()
-		fmt.Printf("healtchecker error: %v", err)
+		utils.FailOnError(err, "health check error")
 	}()
 
 	log.Infof("waiting for messages")

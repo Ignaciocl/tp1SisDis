@@ -111,7 +111,7 @@ func (s *Server) Run() error {
 	healthCheckerReplier := commonHealthcheck.InitHealthCheckerReplier(serviceName)
 	go func() {
 		err := healthCheckerReplier.Run()
-		log.Errorf("healtchecker error: %v", err)
+		utils.FailOnError(err, "health check error")
 	}()
 	common.WaitForSigterm(gracefulManager)
 	return nil
