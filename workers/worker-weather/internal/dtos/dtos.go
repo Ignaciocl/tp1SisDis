@@ -17,6 +17,6 @@ type WeatherData struct {
 type JoinerData struct {
 	City     string      `json:"city"`
 	Data     WeatherData `json:"weatherData"`
-	ClientID string      `json:"key"`
+	ClientID string      `json:"client_id"`
 	commons.EofData
 }

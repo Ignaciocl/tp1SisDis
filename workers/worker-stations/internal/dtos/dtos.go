@@ -12,7 +12,7 @@ type InputData struct {
 type JoinerDataStation struct {
 	City     string      `json:"city"`
 	Data     StationData `json:"stationData"`
-	ClientID string      `json:"key"`
+	ClientID string      `json:"client_id"`
 	common.EofData
 }
 

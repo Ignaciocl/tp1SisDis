@@ -35,7 +35,7 @@ type SendableDataRainfall struct {
 }
 
 type JoinerData[T any] struct {
-	ClientID string `json:"key"`
+	ClientID string `json:"client_id"`
 	City     string `json:"city"`
 	Data     []T    `json:"tripData"`
 	commons.EofData
