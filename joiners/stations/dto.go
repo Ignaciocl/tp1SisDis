@@ -23,7 +23,7 @@ type JoinerDataStation struct {
 	DataStation *ReceivableDataStation `json:"stationData,omitempty"`
 	DataTrip    *[]ReceivableDataTrip  `json:"tripData,omitempty"`
 	Name        string                 `json:"name"`
-	Key         string                 `json:"key"`
+	ClientID    string                 `json:"client_id"`
 	City        string                 `json:"city"`
 	common.EofData
 }
@@ -34,8 +34,8 @@ type senderDataStation struct {
 }
 
 type PreAccumulatorData struct {
-	Data []senderDataStation `json:"data"`
-	Key  string              `json:"key"`
+	Data     []senderDataStation `json:"data"`
+	ClientID string              `json:"client_id"`
 	common.EofData
 }
 
@@ -55,15 +55,15 @@ func (t transformer) ToWritable(data JoinerDataStation) []string {
 	if !data.EOF {
 		s := data.DataStation
 		sData := []string{s.Name, s.Code, s.Name, strconv.Itoa(s.Year)}
-		return []string{data.Key, data.IdempotencyKey, strconv.FormatBool(data.EOF), strings.Join(sData, Sep)}
+		return []string{data.ClientID, data.IdempotencyKey, strconv.FormatBool(data.EOF), strings.Join(sData, Sep)}
 	}
-	return []string{data.Key, data.IdempotencyKey, strconv.FormatBool(data.EOF), ""}
+	return []string{data.ClientID, data.IdempotencyKey, strconv.FormatBool(data.EOF), ""}
 }
 
 func (t transformer) FromWritable(d []string) JoinerDataStation {
 	eof, _ := strconv.ParseBool(d[2])
 	r := JoinerDataStation{
-		Key: d[0],
+		ClientID: d[0],
 	}
 	r.EOF = eof
 	r.IdempotencyKey = d[1]

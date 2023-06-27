@@ -4,12 +4,18 @@ import (
 	"encoding/json"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
 	"github.com/Ignaciocl/tp1SisdisCommons/fileManager"
+	commonHealthcheck "github.com/Ignaciocl/tp1SisdisCommons/healthcheck"
 	"github.com/Ignaciocl/tp1SisdisCommons/keyChecker"
 	"github.com/Ignaciocl/tp1SisdisCommons/queue"
 	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	log "github.com/sirupsen/logrus"
 	"os"
 	"strings"
+)
+
+const (
+	serviceName     = "accumulator-weather"
+	storageFilename = "weather_accumulator.csv"
 )
 
 type WeatherDuration struct {
@@ -21,7 +27,7 @@ type WeatherDuration struct {
 type Receivable struct {
 	Data WeatherDuration `json:"data"`
 	common.EofData
-	Key string `json:"key"`
+	ClientID string `json:"client_id"`
 }
 
 func (r *WeatherDuration) GetId() int64 {
@@ -33,8 +39,8 @@ func (r *WeatherDuration) SetId(id int64) {
 }
 
 type AccumulatorData struct {
-	Dur float64 `json:"duration"`
-	Key string  `json:"key"`
+	Duration float64 `json:"duration"`
+	ClientID string  `json:"client_id"`
 	common.EofData
 }
 
@@ -61,7 +67,7 @@ func main() {
 	aq, _ := queue.InitializeSender[AccumulatorData]("accumulator", 0, nil, "rabbit")
 	sfe, _ := common.CreateConsumerEOF([]common.NextToNotify{{"accumulator", aq}}, "weatherAccumulator", inputQueue, 3) //  three cities
 	grace, _ := common.CreateGracefulManager("rabbit")
-	db, _ := fileManager.CreateDB[*WeatherDuration](t{}, "cambiameAcaLicha", 300, "-impos-")
+	db, _ := fileManager.CreateDB[*WeatherDuration](t{}, storageFilename, 300, "-impos-")
 	defer grace.Close()
 	defer common.RecoverFromPanic(grace, "")
 	defer sfe.Close()
@@ -106,5 +112,12 @@ func main() {
 			utils.LogError(inputQueue.AckMessage(msgId), "error while acking msg")
 		}
 	}()
+
+	healthCheckerReplier := commonHealthcheck.InitHealthCheckerReplier(serviceName)
+	go func() {
+		err := healthCheckerReplier.Run()
+		utils.FailOnError(err, "health check error")
+	}()
+
 	grace.WaitForSigterm()
 }

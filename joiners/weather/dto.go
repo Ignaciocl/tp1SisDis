@@ -18,19 +18,8 @@ type JoinerDataStation struct {
 	DataWeather *ReceivableDataWeather `json:"weatherData,omitempty"`
 	DataTrip    *[]ReceivableDataTrip  `json:"tripData,omitempty"`
 	Name        string                 `json:"name"`
-	Key         string                 `json:"key"`
+	ClientID    string                 `json:"client_id"`
 	common.EofData
-}
-
-type AccumulatorData struct {
-	Dur float64 `json:"duration"`
-	Key string  `json:"key"`
-	common.EofData
-}
-
-type preAccumulatorData struct {
-	DurGathered int
-	Amount      int
 }
 
 type weatherDuration struct {
@@ -46,7 +35,7 @@ type WeatherDuration struct {
 type ToAccWeather struct {
 	Data WeatherDuration `json:"data"`
 	common.EofData
-	Key string `json:"key"`
+	ClientID string `json:"client_id"`
 }
 
 type transformer struct {
@@ -55,15 +44,15 @@ type transformer struct {
 func (t transformer) ToWritable(data JoinerDataStation) []string {
 	if !data.EOF {
 		s := data.DataWeather
-		return []string{data.Key, data.IdempotencyKey, strconv.FormatBool(data.EOF), s.Date}
+		return []string{data.ClientID, data.IdempotencyKey, strconv.FormatBool(data.EOF), s.Date}
 	}
-	return []string{data.Key, data.IdempotencyKey, strconv.FormatBool(data.EOF), ""}
+	return []string{data.ClientID, data.IdempotencyKey, strconv.FormatBool(data.EOF), ""}
 }
 
 func (t transformer) FromWritable(d []string) JoinerDataStation {
 	eof, _ := strconv.ParseBool(d[2])
 	r := JoinerDataStation{
-		Key: d[0],
+		ClientID: d[0],
 	}
 	r.EOF = eof
 	r.IdempotencyKey = d[1]

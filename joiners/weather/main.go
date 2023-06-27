@@ -97,6 +97,9 @@ func main() {
 	}, workerWeather)
 	log.Info("data filled with info previously set")
 	id := os.Getenv("id")
+	if id == "" {
+		panic("missing weather joiner ID")
+	}
 	connection, _ := queue.InitializeConnectionRabbit(nil, "rabbit")
 	inputQueue, _ := queue.InitializeReceiver[JoinerDataStation]("weatherQueue", "", id, "", connection)
 	inputTrips, _ := queue.InitializeReceiver[JoinerDataStation]("weatherQueueTrip", "", id, "", connection)
@@ -168,7 +171,7 @@ func main() {
 					EOF:            false,
 					IdempotencyKey: data.IdempotencyKey,
 				},
-				Key: id,
+				ClientID: id,
 			}, id), "could not send message to accumulator")
 			utils.LogError(inputTrips.AckMessage(msgId), "could not acked message")
 			tripTurn <- s

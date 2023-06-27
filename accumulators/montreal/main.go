@@ -49,6 +49,9 @@ func processData(data AccumulatorData, m map[string]dStation) dStation {
 
 func main() {
 	id := os.Getenv("id")
+	if id == "" {
+		panic("missing montreal accumulator id")
+	}
 	amountCalc, err := strconv.Atoi(os.Getenv("calculators"))
 	utils.FailOnError(err, "missing env value of calculator")
 	db, err := fileManager.CreateDB[*dStation](t{}, storageFilename, 300, Sep)

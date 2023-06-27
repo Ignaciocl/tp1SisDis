@@ -14,7 +14,7 @@ type Accumulator struct {
 	Stations    []string `json:"stations,omitempty"`
 	AvgStations []string `json:"avg_stations,omitempty"`
 	Duration    *float64 `json:"duration"`
-	Key         string   `json:"key"`
+	ClientID    string   `json:"client_Id"`
 	common.EofData
 }
 
@@ -26,19 +26,19 @@ type QueryResponse struct {
 
 func processData(data Accumulator, acc map[string]QueryResponse) {
 	if data.Stations != nil {
-		d := getQueryResponse(data.Key, acc)
+		d := getQueryResponse(data.ClientID, acc)
 		d.Montreal = data.Stations
-		acc[data.Key] = d
+		acc[data.ClientID] = d
 		log.Infof("received response query from montreal (query3): %v", d)
 	} else if data.AvgStations != nil {
-		d := getQueryResponse(data.Key, acc)
+		d := getQueryResponse(data.ClientID, acc)
 		d.Avg = data.AvgStations
-		acc[data.Key] = d
+		acc[data.ClientID] = d
 		log.Infof("received response query from stations (query2): %v", d)
 	} else if data.Duration != nil {
-		d := getQueryResponse(data.Key, acc)
+		d := getQueryResponse(data.ClientID, acc)
 		d.AvgMore30 = data.Duration
-		acc[data.Key] = d
+		acc[data.ClientID] = d
 		log.Infof("received response query from weather (query1): %v", d)
 	}
 }
@@ -104,7 +104,7 @@ func main() {
 	healthCheckerReplier := commonHealthcheck.InitHealthCheckerReplier(serviceName)
 	go func() {
 		err := healthCheckerReplier.Run()
-		log.Errorf("healtchecker error: %v", err)
+		utils.FailOnError(err, "health check error")
 	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")

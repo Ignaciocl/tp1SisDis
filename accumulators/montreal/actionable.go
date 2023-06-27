@@ -18,5 +18,5 @@ func (a actionable) DoActionIfEOF() {
 			v = append(v, key)
 		}
 	}
-	utils.LogError(a.q.SendMessage(Accumulator{Stations: v, Key: a.id}, ""), "could not send data to accumulator")
+	utils.LogError(a.q.SendMessage(Accumulator{Stations: v, ClientID: a.id}, ""), "could not send data to accumulator")
 }

@@ -25,7 +25,7 @@ type JoinerDataStation struct {
 	DataStation *SendableDataStation `json:"stationData,omitempty"`
 	DataTrip    *[]SendableDataTrip  `json:"tripData,omitempty"`
 	Name        string               `json:"name,omitempty"`
-	Key         string               `json:"key,omitempty"`
+	ClientID    string               `json:"client_id,omitempty"`
 	common.EofData
 }
 
@@ -49,16 +49,16 @@ type transformer struct {
 func (t transformer) ToWritable(data JoinerDataStation) []string {
 	s := data.DataStation
 	if data.EOF {
-		return []string{data.Key, data.IdempotencyKey, strconv.FormatBool(data.EOF), ""}
+		return []string{data.ClientID, data.IdempotencyKey, strconv.FormatBool(data.EOF), ""}
 	}
 	stationData := []string{s.Name, s.Code, s.Longitude, s.Latitude, strconv.Itoa(s.Year)}
-	return []string{data.Key, data.IdempotencyKey, strconv.FormatBool(data.EOF), strings.Join(stationData, Sep)}
+	return []string{data.ClientID, data.IdempotencyKey, strconv.FormatBool(data.EOF), strings.Join(stationData, Sep)}
 }
 
 func (t transformer) FromWritable(d []string) JoinerDataStation {
 	eof, _ := strconv.ParseBool(d[2])
 	r := JoinerDataStation{
-		Key: d[0],
+		ClientID: d[0],
 	}
 	r.EOF = eof
 	r.IdempotencyKey = d[1]
