@@ -82,13 +82,16 @@ func (a actionable) DoActionIfEOF() {
 }
 
 func main() {
+	id := os.Getenv("id")
+	if id == "" {
+		panic("missing Montreal Joiner ID")
+	}
 	amountCalc, err := strconv.Atoi(os.Getenv("calculators"))
 	utils.FailOnError(err, "missing env value of calculator")
 	workerStation, err := strconv.Atoi(os.Getenv("amountStationsWorkers"))
 	utils.FailOnError(err, "missing env value of worker stations")
 	workerTrips, err := strconv.Atoi(os.Getenv("amountTripsWorkers"))
 	utils.FailOnError(err, "missing env value of worker trips")
-	id := os.Getenv("id")
 	acc := make(map[string]sData)
 	csvReader, err := fileManager.CreateCSVFileManager[JoinerDataStation](transformer{}, storageFilename)
 	utils.FailOnError(err, "could not load csv file")
@@ -165,7 +168,7 @@ func main() {
 		}
 	}()
 
-	healthCheckerReplier := commonHealthcheck.InitHealthCheckerReplier(serviceName)
+	healthCheckerReplier := commonHealthcheck.InitHealthCheckerReplier(serviceName + id)
 	go func() {
 		err := healthCheckerReplier.Run()
 		utils.FailOnError(err, "health check error")

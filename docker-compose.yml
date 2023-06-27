@@ -347,3 +347,18 @@ services:
     volumes:
       - './healthchecker/main.go:/app/main.go'
       - '/var/run/docker.sock:/var/run/docker.sock'
+
+  client3:
+    build:
+      context: ./client/
+    container_name: client3
+    environment:
+      - CLIENT_ID=3
+      - LOG_LEVEL=DEBUG
+      - TEST_MODE=true
+    depends_on:
+      - server
+    networks:
+      - bikers
+    volumes:
+      - './datasets/:/client/datasets/'

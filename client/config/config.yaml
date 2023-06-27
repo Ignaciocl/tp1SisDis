@@ -1,5 +1,5 @@
 protocol: 'tcp'
-server_address: 'server:3034'
+server_address: 'server:9000'
 server_response_address: 'server:3334'
 packet_limit: 8192 # 8 * 1024
 max_connection_reties: 15

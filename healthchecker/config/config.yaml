@@ -22,7 +22,7 @@ services:
   - 'distributor1'
   - 'distributor2'
   - 'distributor3'
-  - 'joiner-montreal'
+  - 'joiner-montreal1'
   - 'joiner-stations1'
   - 'joiner-stations2'
   - 'joiner-weather1'

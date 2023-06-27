@@ -81,6 +81,11 @@ func (a actionable) DoActionIfEOF() {
 }
 
 func main() {
+	id := os.Getenv("id")
+	if id == "" {
+		panic("missing weather joiner ID")
+	}
+
 	workerWeather, err := strconv.Atoi(os.Getenv("amountWeatherWorkers"))
 	utils.FailOnError(err, "missing env value of worker stations")
 	workerTrips, err := strconv.Atoi(os.Getenv("amountTripsWorkers"))
@@ -96,10 +101,6 @@ func main() {
 		nc: tripTurn,
 	}, workerWeather)
 	log.Info("data filled with info previously set")
-	id := os.Getenv("id")
-	if id == "" {
-		panic("missing weather joiner ID")
-	}
 	connection, _ := queue.InitializeConnectionRabbit(nil, "rabbit")
 	inputQueue, _ := queue.InitializeReceiver[JoinerDataStation]("weatherQueue", "", id, "", connection)
 	inputTrips, _ := queue.InitializeReceiver[JoinerDataStation]("weatherQueueTrip", "", id, "", connection)
@@ -178,7 +179,7 @@ func main() {
 		}
 	}() // For trip
 
-	healthCheckReplier := commonHealthcheck.InitHealthCheckerReplier(serviceName)
+	healthCheckReplier := commonHealthcheck.InitHealthCheckerReplier(serviceName + id)
 	go func() {
 		err := healthCheckReplier.Run()
 		utils.FailOnError(err, "health check error")

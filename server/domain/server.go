@@ -18,7 +18,7 @@ import (
 
 const (
 	serviceName = "server"
-	userID      = "1" // FIXME: delete this variable later
+	userID      = "3" // FIXME: delete this variable later
 )
 
 type closer interface {

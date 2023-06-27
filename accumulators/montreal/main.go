@@ -105,7 +105,7 @@ func main() {
 		}
 	}()
 
-	healthCheckerReplier := commonHealthcheck.InitHealthCheckerReplier(serviceName)
+	healthCheckerReplier := commonHealthcheck.InitHealthCheckerReplier(serviceName + id)
 	go func() {
 		err := healthCheckerReplier.Run()
 		utils.FailOnError(err, "health check error")
