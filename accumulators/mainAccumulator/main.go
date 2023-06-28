@@ -52,7 +52,8 @@ func getQueryResponse(key string, acc map[string]QueryResponse) QueryResponse {
 }
 
 type QueryResult struct {
-	Data QueryResponse `json:"query_result"`
+	Data     QueryResponse `json:"query_result"`
+	ClientId string        `json:"client_id"`
 }
 
 type actionable struct {
@@ -96,7 +97,7 @@ func main() {
 	}()
 	go func() {
 		key := <-ns
-		qr := QueryResult{Data: acc[key]}
+		qr := QueryResult{Data: acc[key], ClientId: key}
 
 		accumulatorInfo.SendMessage(qr, "")
 	}()
