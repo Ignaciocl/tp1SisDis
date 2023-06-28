@@ -100,7 +100,8 @@ func (s *Server) Run() error {
 			return
 		}
 
-		log.Infof("data received from accumulator: %v", result)
+		d, _ := json.Marshal(result)
+		log.Infof("data received from accumulator: %+v\n%s", result, string(d))
 		dataQuery.WriteQueryValue(result.QueryResult, userID) // FIXME: we need the clientID. Nacho
 		utils.LogError(accumulatorInfo.AckMessage(id), "could not ack message")
 	}()
@@ -526,5 +527,5 @@ func getLogMessage(message string, err error) string {
 
 // getIdempotencyKey returns the idempotency key based on the given parameters
 func getIdempotencyKey(clientID string, batchNumber string, city string) string {
-	return fmt.Sprintf("%s-%s-%s", clientID, batchNumber, city)
+	return fmt.Sprintf("%s-%s-%s-%s", clientID, batchNumber, city, clientID)
 }

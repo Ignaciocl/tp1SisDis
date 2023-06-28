@@ -103,6 +103,7 @@ func main() {
 			if data.EOF {
 				iqEOF.AnswerEofOk(data.IdempotencyKey, nil)
 				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
+				continue
 			}
 
 			// Transform raw data into TripData
@@ -124,6 +125,7 @@ func main() {
 
 			if len(tripsData) == 0 {
 				// Nothing to do
+				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 				continue
 			}
 
