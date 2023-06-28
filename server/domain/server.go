@@ -127,6 +127,7 @@ func (s *Server) receiveData(receiverSocket client.Client, eofStarter common.Pub
 
 	clientsSemaphore := concurrency.NewSemaphore(s.config.MaxActiveClients)
 
+	log.Info("Listener started correctly. Waiting for clients!")
 	for {
 		clientsSemaphore.Acquire()
 		messageHandler, err := receiverSocket.AcceptNewConnections()
@@ -135,6 +136,7 @@ func (s *Server) receiveData(receiverSocket client.Client, eofStarter common.Pub
 			clientsSemaphore.Release()
 			continue
 		}
+		log.Info("Connection with client established!")
 
 		go func(messageHandler client.MessageHandler) {
 			defer clientsSemaphore.Release()
@@ -200,7 +202,7 @@ func (s *Server) handleInputData(messageHandler client.MessageHandler, eofStarte
 		message := string(bodyBytes)
 
 		// Receive EOF
-		if utils.Contains[string](message, s.config.InputDataFinMessages) {
+		if s.isEOFMessage(message) {
 			finMessage := utils.GetFINMessage(message)
 			log.Debug(getLogMessage("receive FIN Message: "+finMessage, nil))
 
@@ -217,12 +219,20 @@ func (s *Server) handleInputData(messageHandler client.MessageHandler, eofStarte
 			messageMetadata := utils.GetMetadataFromMessage(message)
 			eofIdempotencyKey := fmt.Sprintf("%s-%s-%s", messageMetadata.City, messageMetadata.DataType, messageMetadata.ClientID)
 
-			eofData := dtos.NewEOF(
+			metadataEOF := dtos.NewMetadata(
 				eofIdempotencyKey,
+				true,
 				messageMetadata.City,
+				messageMetadata.DataType,
 				serviceName,
-				"eof message", // ToDo: refactor, we dont need this
+				"message of the eof",
 			)
+
+			eofData := dtos.EOFData{
+				Metadata: metadataEOF,
+			}
+
+			log.Debugf("EOF a mandar: %+v", eofData)
 
 			eofDataBytes, err := json.Marshal(eofData)
 			if err != nil {
@@ -230,6 +240,7 @@ func (s *Server) handleInputData(messageHandler client.MessageHandler, eofStarte
 				return err
 			}
 
+			log.Debugf("Publish config: %+v", publishingConfig)
 			err = eofStarter.Publish(publishingConfig.Exchange, eofDataBytes, publishingConfig.RoutingKey, publishingConfig.Topic)
 			if err != nil {
 				log.Error(getLogMessage("error publishing EOF", err))
@@ -485,6 +496,15 @@ func (s *Server) sendACK(messageHandler client.MessageHandler) error {
 	}
 
 	return nil
+}
+
+func (s *Server) isEOFMessage(message string) bool {
+	for _, eofMessage := range s.config.InputDataFinMessages {
+		if strings.Contains(message, eofMessage) {
+			return true
+		}
+	}
+	return false
 }
 
 // closeService close the given service. If an error occurs it will  be logged

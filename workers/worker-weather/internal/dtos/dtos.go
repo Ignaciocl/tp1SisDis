@@ -8,6 +8,7 @@ import (
 type InputData struct {
 	Metadata dtos.Metadata `json:"metadata"`
 	Data     []string      `json:"data"`
+	commons.EofData
 }
 type WeatherData struct {
 	Date string  `json:"date"`

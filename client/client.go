@@ -4,9 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	commons "github.com/Ignaciocl/tp1SisdisCommons/client"
-	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
-	"io"
 	"math/rand"
 	"os"
 	"strings"
@@ -20,6 +18,7 @@ const (
 	weatherFile  = "weather"
 	stationsFile = "stations"
 	finishKey    = "finish"
+	wildcardCity = "*"
 )
 
 var (
@@ -150,7 +149,7 @@ func (c *Client) SendData() error {
 		return err
 	}
 
-	err = c.sendFinMessage(finishKey)
+	err = c.sendFinMessage(finishKey, wildcardCity) // We don't need the city, it's just a FIN connection message
 	if err != nil {
 		return err
 	}
@@ -168,14 +167,15 @@ func (c *Client) sendWeatherData() error {
 			log.Error(fmt.Sprintf(errorMessage, weatherFile, city, err.Error()))
 			return err
 		}
+
+		err = c.sendFinMessage(weatherFile, city)
+		if err != nil {
+			log.Errorf("[method:SendWeatherData]error sending FIN message: %s", err.Error())
+			return err
+		}
 	}
 
-	err := c.sendFinMessage(weatherFile)
-	if err != nil {
-		log.Errorf("[method:SendWeatherData]error sending FIN message: %s", err.Error())
-		return err
-	}
-
+	log.Info("All Weather data was sent!")
 	return nil
 }
 
@@ -188,14 +188,15 @@ func (c *Client) sendStationsData() error {
 			log.Error(fmt.Sprintf(errorMessage, stationsFile, city, err.Error()))
 			return err
 		}
+
+		err = c.sendFinMessage(stationsFile, city)
+		if err != nil {
+			log.Errorf("[method:SendStationsData]error sending FIN message: %s", err.Error())
+			return err
+		}
 	}
 
-	err := c.sendFinMessage(stationsFile)
-	if err != nil {
-		log.Errorf("[method:SendStationsData]error sending FIN message: %s", err.Error())
-		return err
-	}
-
+	log.Info("All Stations data was sent!")
 	return nil
 }
 
@@ -208,14 +209,16 @@ func (c *Client) sendTripsData() error {
 			log.Error(fmt.Sprintf(errorMessage, tripsFile, city, err.Error()))
 			return err
 		}
+
+		err = c.sendFinMessage(tripsFile, city)
+		if err != nil {
+			log.Errorf("[method:SendTripsData]error sending FIN message: %s", err.Error())
+			return err
+		}
+
 	}
 
-	err := c.sendFinMessage(tripsFile)
-	if err != nil {
-		log.Errorf("[method:SendTripsData]error sending FIN message: %s", err.Error())
-		return err
-	}
-
+	log.Info("All Trips data was sent!")
 	return nil
 }
 
@@ -228,33 +231,35 @@ func (c *Client) GetResponses() error {
 	for {
 		err := c.receiverSocket.Send(messageBytes)
 
-		if errors.Is(err, io.EOF) {
+		if err != nil {
 			log.Infof("connection with server lost. Reconnecting receiver...")
 			err = c.EstablishReceiverConnection()
 			if err != nil {
 				return err
 			}
-		}
-
-		if err != nil && !errors.Is(err, io.EOF) {
-			log.Errorf("[GetResponses] error sending Get response message: %v", err)
 			continue
 		}
+
+		/*if err != nil && !errors.Is(err, io.EOF) {
+			log.Errorf("[GetResponses] error sending Get response message: %v", err)
+			continue
+		}*/
 
 		response, err := c.receiverSocket.Listen()
 
-		if errors.Is(err, io.EOF) {
+		if err != nil {
 			log.Infof("connection with server lost. Reconnecting receiver...")
 			err = c.EstablishReceiverConnection()
 			if err != nil {
 				return err
 			}
-		}
-
-		if err != nil && !errors.Is(err, io.EOF) {
-			log.Errorf("error waiting for server response to queries: %v", err)
 			continue
 		}
+
+		/*if err != nil && !errors.Is(err, io.EOF) {
+			log.Errorf("error waiting for server response to queries: %v", err)
+			continue
+		}*/
 
 		responseStr = string(response)
 		if responseStr != c.config.KeepAskingResponse {
@@ -292,6 +297,7 @@ func (c *Client) sendDataFromFile(filepath string, city string, data string) err
 	batchDataCounter := 0 // to know if the batch is full or not
 
 	var dataToSend []string
+	c.batchCounter += 1
 	for fileScanner.Scan() {
 		if batchDataCounter == c.config.BatchSize {
 			c.batchCounter += 1
@@ -334,46 +340,52 @@ func (c *Client) sendDataFromFile(filepath string, city string, data string) err
 
 // sendFinMessage sends a message to the server indicating that all the data from 'dataType' file was sent.
 // + dataType possible values: weather, stations, trips
-func (c *Client) sendFinMessage(dataType string) error {
+// + city: montreal, washington or toronto
+func (c *Client) sendFinMessage(dataType string, city string) error {
 	finMessage, ok := c.config.FinACKMessages[dataType]
 	if !ok {
 		panic(fmt.Sprintf("cannot find FIN-ACK message for data type %s", dataType))
 	}
+
+	finMessage = c.transformDataToSend(dataType, city, finMessage)
 	log.Debugf("[data: %s] sending FIN MESSAGE %s", dataType, finMessage)
 	finMessageBytes := []byte(finMessage)
+
 	for {
 		err := c.senderSocket.Send(finMessageBytes)
 
-		if errors.Is(err, io.EOF) {
+		if err != nil {
 			log.Infof("connection with server lost. Reconnecting sender...")
 			err = c.EstablishSenderConnection()
 			if err != nil {
 				return err
 			}
-		}
-
-		if err != nil && !errors.Is(err, io.EOF) {
-			log.Errorf("error sending fin message %s: %v", finMessage, err)
 			continue
 		}
+
+		/*if err != nil && !errors.Is(err, io.EOF) {
+			log.Errorf("error sending fin message %s: %v", finMessage, err)
+			continue
+		}*/
 
 		log.Debugf("[data sent: %s] waiting for server response to FIN MESSAGE %s", dataType, finMessage)
 		response, err := c.senderSocket.Listen()
 
-		if errors.Is(err, io.EOF) {
+		if err != nil {
 			log.Infof("connection with server lost. Reconnecting sender...")
 			err = c.EstablishSenderConnection()
 			if err != nil {
 				return err
 			}
-		}
-
-		if err != nil && !errors.Is(err, io.EOF) {
-			log.Errorf("error waiting for server response to FIN message %s: %v", finMessage, err)
 			continue
 		}
 
-		if string(response) != finMessage {
+		/*if err != nil && !errors.Is(err, io.EOF) {
+			log.Errorf("error waiting for server response to FIN message %s: %v", finMessage, err)
+			continue
+		}*/
+
+		if string(response) != c.config.ServerACK {
 			log.Errorf("error got unexpected response. Expected %s, got: %s", finMessage, string(response))
 			continue
 		}
@@ -385,7 +397,7 @@ func (c *Client) sendFinMessage(dataType string) error {
 
 // sendBatch sends a batch with data to the server and waits for its ACK
 func (c *Client) sendBatch(batch []string) error {
-	debugCity := strings.SplitN(batch[0], ",", 6)[3]
+	debugCity := strings.SplitN(batch[0], ",", 6)[4]
 
 	// Join data with |, e.g data1|data2|data3|...|dataN eg of data: clientID,messageNum,dataType,city,weatherField1,weatherField2,...
 	dataJoined := strings.Join(batch, c.config.DataDelimiter)
@@ -394,40 +406,43 @@ func (c *Client) sendBatch(batch []string) error {
 	for {
 		err := c.senderSocket.Send(dataJoinedBytes)
 
-		if errors.Is(err, io.EOF) {
+		if err != nil {
 			log.Infof("connection with server lost. Reconnecting sender...")
 			err = c.EstablishSenderConnection()
 			if err != nil {
 				return err
 			}
-		}
-
-		if err != nil && !errors.Is(err, io.EOF) {
-			log.Errorf("[city: %s] error sending batch: %v", debugCity, err)
 			continue
 		}
+
+		/*if err != nil && !errors.Is(err, io.EOF) {
+			log.Errorf("[city: %s] error sending batch: %v", debugCity, err)
+			continue
+		}*/
 
 		log.Debugf("[city: %s] data sent, waiting for server ACK", debugCity)
 		response, err := c.senderSocket.Listen()
 
-		if errors.Is(err, io.EOF) {
+		if err != nil {
 			log.Infof("connection with server lost. Reconnecting sender...")
 			err = c.EstablishSenderConnection()
 			if err != nil {
 				return err
 			}
+			continue
 		}
 
-		if err != nil {
+		/*if err != nil {
 			log.Debugf("[city: %s] error while wainting for server ACK: %s", debugCity, err.Error())
 			return err
-		}
+		}*/
 
 		if string(response) != c.config.ServerACK {
 			log.Errorf("error got unexpected response. Expected %s, got: %s. Retrying...", c.config.ServerACK, string(response))
 			continue
 		}
 
+		log.Debugf("[city: %s] receive ACK of batch: %s", debugCity, response)
 		return nil
 	}
 }
@@ -437,9 +452,9 @@ func (c *Client) sendBatch(batch []string) error {
 // + Filename possible values: weather, stations, trips
 func (c *Client) getFilePath(city string, filename string) string {
 	if c.config.TestMode {
-		return fmt.Sprintf("./datasets/test/%s/%s/%s_test.%s", clientStr+c.ID, city, filename, fileFormat)
+		return fmt.Sprintf("../datasets/test/client_%s/%s/%s.%s", c.ID, city, filename, fileFormat)
 	}
-	return fmt.Sprintf("./datasets/%s/%s/%s.%s", clientStr+c.ID, city, filename, fileFormat)
+	return fmt.Sprintf("./datasets/client_%s/%s/%s.%s", c.ID, city, filename, fileFormat)
 }
 
 // transformDataToSend transforms the data from the file adding the following info:

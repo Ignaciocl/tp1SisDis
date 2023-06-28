@@ -20,7 +20,7 @@ import (
 const (
 	idEnvVar         = "id"
 	logLevelEnvVar   = "LOG_LEVEL"
-	defaultLogLevel  = "INFO"
+	defaultLogLevel  = "DEBUG"
 	serviceName      = "worker-station"
 	montrealStation  = "montreal"
 	connectionString = "rabbit"
@@ -47,10 +47,11 @@ func InitLogger(logLevel string) error {
 }
 
 func main() {
-	logLevel := os.Getenv(logLevelEnvVar)
+	/*logLevel := os.Getenv(logLevelEnvVar)
 	if logLevel == "" {
 		logLevel = defaultLogLevel
-	}
+	}*/
+	logLevel := defaultLogLevel
 
 	if err := InitLogger(logLevel); err != nil {
 		panic(fmt.Sprintf("error initializing logger: %v", err))
@@ -95,9 +96,9 @@ func main() {
 
 			metadata := data.Metadata
 
-			if metadata.IsEOF() {
+			if data.EOF {
 				log.Infof("eof received to be triggered: %v", data)
-				iqEOF.AnswerEofOk(metadata.GetIdempotencyKey(), nil)
+				iqEOF.AnswerEofOk(data.IdempotencyKey, nil)
 				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 				continue
 			}

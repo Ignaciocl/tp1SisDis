@@ -20,7 +20,7 @@ import (
 const (
 	idEnvVar         = "id"
 	logLevelEnvVar   = "LOG_LEVEL"
-	defaultLogLevel  = "INFO"
+	defaultLogLevel  = "DEBUG"
 	serviceName      = "worker-weather"
 	connectionString = "rabbit"
 )
@@ -44,10 +44,11 @@ func InitLogger(logLevel string) error {
 }
 
 func main() {
-	logLevel := os.Getenv(logLevelEnvVar)
+	/*logLevel := os.Getenv(logLevelEnvVar)
 	if logLevel == "" {
 		logLevel = defaultLogLevel
-	}
+	}*/
+	logLevel := defaultLogLevel
 
 	if err := InitLogger(logLevel); err != nil {
 		panic(fmt.Sprintf("error initializing logger: %v", err))
@@ -84,8 +85,8 @@ func main() {
 
 			metadata := data.Metadata
 
-			if metadata.IsEOF() {
-				iqEOF.AnswerEofOk(metadata.GetIdempotencyKey(), nil)
+			if data.EOF {
+				iqEOF.AnswerEofOk(data.IdempotencyKey, nil)
 				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 				continue
 			}
@@ -102,7 +103,7 @@ func main() {
 					log.Errorf("Error transforming raw weather data: %v", err)
 					panic(err)
 				}
-
+				
 				// 2. Get extra data contain in the message
 				rawMessageExtraData := utils.GetMetadataFromMessage(rawWeatherData)
 				metadata.IdempotencyKey = fmt.Sprintf( //clientID-batchNum-messageNum-city

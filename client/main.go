@@ -29,8 +29,8 @@ func LoadClientConfig() (ClientConfig, error) {
 		return ClientConfig{}, fmt.Errorf("error parsing client config file: %s", err)
 	}
 
-	testMode := os.Getenv(testEnvVar)
-	clientConfig.TestMode = testMode == "true"
+	//testMode := os.Getenv(testEnvVar)
+	clientConfig.TestMode = true
 
 	return clientConfig, nil
 }
@@ -64,11 +64,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	clientID := os.Getenv(clientIDEnvVar)
-	if clientID == "" {
+	clientID := "1"
+	/*if clientID == "" {
 		fmt.Printf("error missing client ID")
 		return
-	}
+	}*/
 
 	clientConfig, err := LoadClientConfig()
 	if err != nil {

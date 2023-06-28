@@ -194,7 +194,7 @@ services:
     networks:
     - bikers
     ports:
-    - 3034:9000
+    - 9000:9000
     - 3334:3334
     volumes:
       - './server/main.go:/app/main.go'
@@ -336,29 +336,29 @@ services:
     networks:
       - bikers
 
-  diosito:
-    build:
-      context: ./healthchecker/
-    container_name: diosito
-    depends_on:
-      - server
-    networks:
-      - bikers
-    volumes:
-      - './healthchecker/main.go:/app/main.go'
-      - '/var/run/docker.sock:/var/run/docker.sock'
+#  diosito:
+#    build:
+#      context: ./healthchecker/
+#    container_name: diosito
+#    depends_on:
+#      - server
+#    networks:
+#      - bikers
+#    volumes:
+#      - './healthchecker/main.go:/app/main.go'
+#      - '/var/run/docker.sock:/var/run/docker.sock'
 
-  client3:
-    build:
-      context: ./client/
-    container_name: client3
-    environment:
-      - CLIENT_ID=3
-      - LOG_LEVEL=DEBUG
-      - TEST_MODE=true
-    depends_on:
-      - server
-    networks:
-      - bikers
-    volumes:
-      - './datasets/:/client/datasets/'
+#  client1:
+#    build:
+#      context: ./client/
+#    container_name: client1
+#    environment:
+#      - CLIENT_ID=1
+#      - LOG_LEVEL=DEBUG
+#      - TEST_MODE=true
+#    depends_on:
+#      - server
+#    networks:
+#      - bikers
+#    volumes:
+#      - './datasets/:/client/datasets/'

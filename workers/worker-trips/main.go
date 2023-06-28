@@ -20,7 +20,7 @@ import (
 const (
 	idEnvVar         = "id"
 	logLevelEnvVar   = "LOG_LEVEL"
-	defaultLogLevel  = "INFO"
+	defaultLogLevel  = "DEBUG"
 	serviceName      = "worker-trip"
 	montrealStation  = "montreal"
 	connectionString = "rabbit"
@@ -47,10 +47,11 @@ func InitLogger(logLevel string) error {
 }
 
 func main() {
-	logLevel := os.Getenv(logLevelEnvVar)
+	/*logLevel := os.Getenv(logLevelEnvVar)
 	if logLevel == "" {
 		logLevel = defaultLogLevel
-	}
+	}*/
+	logLevel := defaultLogLevel
 
 	if err := InitLogger(logLevel); err != nil {
 		panic(fmt.Sprintf("error initializing logger: %v", err))
@@ -99,8 +100,8 @@ func main() {
 
 			metadata := data.Metadata
 
-			if metadata.IsEOF() {
-				iqEOF.AnswerEofOk(metadata.GetIdempotencyKey(), nil)
+			if data.EOF {
+				iqEOF.AnswerEofOk(data.IdempotencyKey, nil)
 				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 			}
 
@@ -164,11 +165,11 @@ func sendData(
 	rainfallData := make([]dtos.SendableDataRainfall, 0, batchSize)
 
 	for _, trip := range tripsData {
-		if buildMontreal && filter.ValidStationCodes(trip) {
+		if buildMontreal {
 			montrealData = append(montrealData, dtos.NewSendableDataMontrealFromTrip(trip))
 		}
 
-		if yearInRange(trip.Year, lowerBoundYear, upperBoundYear) && filter.ValidStationCodes(trip) {
+		if yearInRange(trip.Year, lowerBoundYear, upperBoundYear) {
 			duplicatesData = append(duplicatesData, dtos.NewSendableDataDuplicatesFromTrip(trip))
 		}
 

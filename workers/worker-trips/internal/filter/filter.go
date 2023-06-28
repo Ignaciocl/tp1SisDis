@@ -34,5 +34,5 @@ func ValidStationCodes(tripData dtos.TripData) bool {
 
 // ValidDuration returns true if the duration is greater than 0
 func ValidDuration(tripData dtos.TripData) bool {
-	return tripData.Duration > 0.0
+	return tripData.Duration >= 0.0
 }

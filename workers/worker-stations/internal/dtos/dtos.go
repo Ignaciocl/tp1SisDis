@@ -8,6 +8,7 @@ import (
 type InputData struct {
 	Metadata dtos.Metadata `json:"metadata"`
 	Data     []string      `json:"data"`
+	common.EofData
 }
 type JoinerDataStation struct {
 	City     string      `json:"city"`

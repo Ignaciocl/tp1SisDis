@@ -49,6 +49,7 @@ func main() {
 		log.Error(getLogMessage("error loading server config", err))
 		return
 	}
+	log.Debugf("Server Config: %+v", *serverConfig)
 
 	server := domain.NewServer(serverConfig)
 	log.Info(getLogMessage("Server initialized correctly, starting main functions...", nil))

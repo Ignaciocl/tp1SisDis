@@ -65,10 +65,11 @@ func InitLogger(logLevel string) error {
 }
 
 func main() {
-	logLevel := os.Getenv(logLevelEnvVar)
+	/*logLevel := os.Getenv(logLevelEnvVar)
 	if logLevel == "" {
 		logLevel = defaultLogLevel
-	}
+	}*/
+	logLevel := defaultLogLevel
 
 	if err := InitLogger(logLevel); err != nil {
 		panic(fmt.Sprintf("error initializing logger: %v", err))
@@ -83,6 +84,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	log.Debugf("Distributor config: %+v", *distributorConfig)
 	workerQueues := distributorConfig.WorkerQueues
 	maxAmountReceivers := distributorConfig.MaxAmountReceivers
 	necessaryAmount := distributorConfig.NecessaryAmount
@@ -148,6 +150,8 @@ func main() {
 				continue
 			}
 
+			//log.Debugf("received data: %+v, is eof: %v", data, data.Metadata.IsEOF())
+
 			metadata := data.Metadata
 
 			if metadata.IsEOF() {
@@ -180,7 +184,8 @@ func main() {
 				sender = tripsWorkerQueue
 			default:
 				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
-				continue
+				// sanity-check
+				panic("invalid data type")
 			}
 
 			err = sender.SendMessage(data, "")
