@@ -13,6 +13,10 @@ import (
 	"os"
 )
 
+type cleanable interface {
+	Clear()
+}
+
 type ReceivableDataStation struct {
 	Name string `json:"name"`
 	Year int    `json:"year"`
@@ -35,8 +39,8 @@ func processData(data JoinerDataStation, acc map[string]stationData, db fileMana
 	}
 	currentRunValues := map[string]bool{}
 	for _, ds := range data.DataStation {
-		_, alreadyUsedThisRun := currentRunValues[ds.Name]
-		if d, ok := acc[ds.Name]; ok && (data.IdempotencyKey != d.LastSetIdempotencyKey || alreadyUsedThisRun) {
+		//_, alreadyUsedThisRun := currentRunValues[ds.Name]
+		if d, ok := acc[ds.Name]; ok {
 			currentRunValues[ds.Name] = true
 			d.LastSetIdempotencyKey = data.IdempotencyKey
 			d.addYear(ds.Year)
@@ -60,6 +64,7 @@ type actionable struct {
 	acc map[string]stationData
 	id  string
 	aq  queue.Sender[AccumulatorData]
+	c   []cleanable
 }
 
 func (a actionable) DoActionIfEOF() {
@@ -84,6 +89,9 @@ func (a actionable) DoActionIfEOF() {
 
 	log.Infof("sending message to accumulator")
 	utils.LogError(a.aq.SendMessage(l, ""), "could not send message to accumulator")
+	for _, v := range a.c {
+		v.Clear()
+	}
 }
 
 func main() {
@@ -107,6 +115,7 @@ func main() {
 		acc: acc,
 		aq:  aq,
 		id:  id,
+		c:   []cleanable{db, eofDb, ik},
 	}
 	utils.FailOnError(fillData(acc, db, eofDb, sfe, actionableEOF), "could not fill with data from the db")
 	go func() {

@@ -9,6 +9,7 @@ type actionable struct {
 	acc map[string]dStation
 	q   queue.Sender[Accumulator]
 	id  string
+	c   []cleanable
 }
 
 func (a actionable) DoActionIfEOF() {
@@ -19,4 +20,7 @@ func (a actionable) DoActionIfEOF() {
 		}
 	}
 	utils.LogError(a.q.SendMessage(Accumulator{Stations: v, Key: a.id}, ""), "could not send data to accumulator")
+	for _, v := range a.c {
+		v.Clear()
+	}
 }

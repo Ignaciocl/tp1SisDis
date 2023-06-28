@@ -1,15 +1,21 @@
 package main
 
 import (
+	"errors"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
 	"github.com/Ignaciocl/tp1SisdisCommons/fileManager"
 	"github.com/Ignaciocl/tp1SisdisCommons/keyChecker"
 	"github.com/Ignaciocl/tp1SisdisCommons/queue"
 	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	log "github.com/sirupsen/logrus"
+	"io"
 	"os"
 	"strconv"
 )
+
+type cleanable interface {
+	Clear()
+}
 
 type AccumulatorData struct {
 	EndingStation string  `json:"ending_station"`
@@ -33,6 +39,7 @@ func processData(data AccumulatorData, m map[string]dStation) dStation {
 		station = dStation{
 			Counter:         0,
 			DistanceCounted: 0,
+			Station:         data.EndingStation,
 		}
 	}
 	station.add(data.Distance)
@@ -59,6 +66,13 @@ func main() {
 	defer me.Close()
 	defer inputQueue.Close()
 	defer outputQueue.Close()
+	act := actionable{
+		q:   outputQueue,
+		acc: acc,
+		id:  id,
+		c:   []cleanable{db, eofDb, ik},
+	}
+	utils.FailOnError(fillWithData(eofDb, db, acc, me, act), "could not update local state")
 	go func() {
 		for {
 			dataInfo, msgId, err := inputQueue.ReceiveMessage()
@@ -67,11 +81,7 @@ func main() {
 					IdempotencyKey: id,
 					Id:             0,
 				}), "could not update eof database")
-				me.AnswerEofOk(id, actionable{
-					q:   outputQueue,
-					acc: acc,
-					id:  id,
-				})
+				me.AnswerEofOk(id, act)
 				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 				continue
 			}
@@ -97,4 +107,27 @@ func main() {
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
 	common.WaitForSigterm(grace)
+}
+
+func fillWithData(eofDb fileManager.Manager[*eofData], db fileManager.Manager[*dStation], acc map[string]dStation, eofProcessor common.WaitForEof, act actionable) error {
+	for {
+		line, err := db.ReadLine()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return err
+		}
+		acc[line.Station] = *line
+	}
+	for {
+		line, err := eofDb.ReadLine()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			return err
+		}
+		eofProcessor.AnswerEofOk(line.IdempotencyKey, act)
+	}
 }

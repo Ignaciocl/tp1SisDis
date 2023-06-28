@@ -12,6 +12,7 @@ type dStation struct {
 	Counter            float64 `json:"counter"`
 	DistanceCounted    float64 `json:"distanceCounted"`
 	LastIdempotencyKey string  `json:"last_idempotency_key"`
+	Station            string  `json:"station"`
 	Id                 int64   `json:"id"`
 }
 
