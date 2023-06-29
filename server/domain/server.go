@@ -333,8 +333,10 @@ func (s *Server) handleSendResponses(messageHandler client.MessageHandler, dataQ
 			log.Error(getLogMessage("error sending query response", err))
 			return err
 		}
+		dataQuery.DeleteQueryValue(clientID)
 
 		log.Infof("Response sent to client with ID %s", clientID)
+
 		return nil
 	}
 }

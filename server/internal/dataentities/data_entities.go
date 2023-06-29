@@ -34,3 +34,11 @@ func (dq DataQuery) WriteQueryValue(data map[string]interface{}, userID string) 
 	dq.Data[userID] = data
 	dq.Sem <- d
 }
+
+func (dq DataQuery) DeleteQueryValue(key string) {
+	d := <-dq.Sem
+	if _, ok := dq.Data[key]; ok {
+		delete(dq.Data, key)
+	}
+	dq.Sem <- d
+}

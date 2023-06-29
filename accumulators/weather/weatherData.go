@@ -2,47 +2,50 @@ package main
 
 import (
 	"encoding/json"
+	common "github.com/Ignaciocl/tp1SisdisCommons"
 	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	"strings"
 )
 
-const Sep = "-DATAENDED-"
+const Sep = "-impos-"
 
-type dStation struct {
-	Counter            float64 `json:"counter"`
-	DistanceCounted    float64 `json:"distanceCounted"`
-	LastIdempotencyKey string  `json:"last_idempotency_key"`
-	Station            string  `json:"station"`
-	Id                 int64   `json:"id"`
+type WeatherDuration struct {
+	Total              int    `json:"total"`
+	Duration           int    `json:"duration"`
+	Id                 int64  `json:"id"`
+	LastIdempotencyKey string `json:"last_idempotency_key"`
+}
+type Receivable struct {
+	Data WeatherDuration `json:"data"`
+	common.EofData
+	ClientID string `json:"client_id"`
 }
 
-func (d *dStation) add(distance float64) {
-	d.DistanceCounted += distance
-	d.Counter += 1
+func (r *WeatherDuration) GetId() int64 {
+	return r.Id
 }
 
-func (d *dStation) didItWentMoreThan(distanceAvg float64) bool {
-	return (d.DistanceCounted / d.Counter) > distanceAvg
+func (r *WeatherDuration) SetId(id int64) {
+	r.Id = id
 }
 
-func (d *dStation) GetId() int64 {
-	return d.Id
+type AccumulatorData struct {
+	Duration float64 `json:"duration"`
+	ClientID string  `json:"client_id"`
+	common.EofData
 }
 
-func (d *dStation) SetId(id int64) {
-	d.Id = id
+type t struct {
 }
 
-type t struct{}
-
-func (t t) ToWritable(data *dStation) []byte {
-	returnable, _ := json.Marshal(data)
-	return returnable
+func (t t) ToWritable(data *WeatherDuration) []byte {
+	d, _ := json.Marshal(data)
+	return d
 }
 
-func (t t) FromWritable(d []byte) *dStation {
+func (t t) FromWritable(d []byte) *WeatherDuration {
 	data := strings.Split(string(d), Sep)[0]
-	var r dStation
+	var r WeatherDuration
 	if err := json.Unmarshal([]byte(data), &r); err != nil {
 		utils.LogError(err, "could not unmarshal from db")
 	}

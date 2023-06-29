@@ -12,6 +12,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"io"
 	"os"
+	"strconv"
+	"strings"
 )
 
 const (
@@ -42,8 +44,8 @@ func processData(data JoinerDataStation, acc map[string]stationData, db fileMana
 		return
 	}
 	for i, ds := range data.DataStation {
-		ik := fmt.Sprintf("%s-%d", data.IdempotencyKey, i)
-		if d, ok := acc[ds.Name]; ok && (ik != d.LastSetIdempotencyKey) {
+		ik := fmt.Sprintf("%s|%d", data.IdempotencyKey, i)
+		if d, ok := acc[ds.Name]; ok && checkIdempotencyKey(ik, d) {
 			d.LastSetIdempotencyKey = ik
 			d.addYear(ds.Year)
 			utils.LogError(db.Write(&d), "could not write into db")
@@ -62,10 +64,25 @@ func processData(data JoinerDataStation, acc map[string]stationData, db fileMana
 	}
 }
 
+func checkIdempotencyKey(ik string, d stationData) bool {
+	lastIdempotencyDecompress := strings.Split(d.LastSetIdempotencyKey, "|")
+	id1, _ := strconv.Atoi(lastIdempotencyDecompress[1])
+	lastIKDecompress := strings.Split(ik, "|")
+	id2, _ := strconv.Atoi(lastIKDecompress[1])
+	return ik != d.LastSetIdempotencyKey &&
+		((lastIdempotencyDecompress[0] != lastIKDecompress[0]) ||
+			(id2 > id1))
+}
+
+type cleanable interface {
+	Clear()
+}
+
 type actionable struct {
 	acc map[string]stationData
 	id  string
 	aq  queue.Sender[AccumulatorData]
+	c   []cleanable
 }
 
 func (a actionable) DoActionIfEOF() {
@@ -90,6 +107,12 @@ func (a actionable) DoActionIfEOF() {
 
 	log.Infof("sending message to accumulator")
 	utils.LogError(a.aq.SendMessage(l, ""), "could not send message to accumulator")
+	for _, c := range a.c {
+		c.Clear()
+	}
+	for k := range a.acc {
+		delete(a.acc, k)
+	}
 }
 
 func main() {
@@ -113,12 +136,18 @@ func main() {
 		acc: acc,
 		aq:  aq,
 		id:  id,
+		c:   []cleanable{db, eofDb, ik},
 	}
 	utils.FailOnError(fillData(acc, db, eofDb, sfe, actionableEOF), "could not fill with data from the db")
 	go func() {
 		for {
 			data, msgId, err := inputQueue.ReceiveMessage()
 			if data.EOF {
+				if !strings.HasSuffix(data.IdempotencyKey, id) {
+					log.Infof("eof received from another client: %s, not propagating", data.IdempotencyKey)
+					utils.LogError(inputQueue.AckMessage(msgId), "could not acked message")
+					continue
+				}
 				idempotencyKey := id
 				utils.LogError(eofDb.Write(&eofData{
 					IdempotencyKey: idempotencyKey,
@@ -133,8 +162,9 @@ func main() {
 				continue
 			}
 			if ik.IsKey(data.IdempotencyKey) {
-				// utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
-				// continue
+				log.Infof("idempotency key already existed: %s", data.IdempotencyKey)
+				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
+				continue
 			}
 			processData(data, acc, db)
 			utils.LogError(ik.AddKey(data.IdempotencyKey), "could not store idempotency key")

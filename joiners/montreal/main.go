@@ -31,7 +31,7 @@ func processData(station JoinerDataStation, accumulator map[string]sData) {
 	}
 }
 
-func processTripData(trip *[]SendableDataTrip, accumulator map[string]sData, aq queue.Sender[AccumulatorInfo], ik string) {
+func processTripData(trip *[]SendableDataTrip, accumulator map[string]sData, aq queue.Sender[AccumulatorInfo], ik string, id string) {
 	if trip == nil {
 		log.Error("trip is nil, no processing is made but something must be checked")
 		return
@@ -48,7 +48,7 @@ func processTripData(trip *[]SendableDataTrip, accumulator map[string]sData, aq 
 		EofData: common.EofData{
 			IdempotencyKey: ik,
 		},
-	}, "")
+	}, id)
 }
 
 func getStationKey(stationCode string, year int) string {
@@ -72,13 +72,21 @@ func obtainInfoToSend(accumulator map[string]sData, trip SendableDataTrip) (Accu
 
 }
 
+type clearable interface {
+	Clear()
+}
+
 type actionable struct {
 	c  chan struct{}
 	nc chan struct{}
+	cl clearable
 }
 
 func (a actionable) DoActionIfEOF() {
 	a.nc <- <-a.c // continue the loop
+	if a.cl != nil {
+		a.cl.Clear()
+	}
 }
 
 func main() {
@@ -153,6 +161,7 @@ func main() {
 				tfe.AnswerEofOk(data.IdempotencyKey, actionable{
 					c:  tt,
 					nc: st,
+					cl: csvReader,
 				})
 				utils.LogError(inputQueueTrip.AckMessage(msgId), "failed while trying ack")
 				continue
@@ -162,7 +171,7 @@ func main() {
 				continue
 			}
 			d := <-tt
-			processTripData(data.DataTrip, acc, aq, data.IdempotencyKey)
+			processTripData(data.DataTrip, acc, aq, data.IdempotencyKey, id)
 			utils.LogError(inputQueueTrip.AckMessage(msgId), "failed while trying ack")
 			tt <- d
 		}

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"encoding/json"
+	"errors"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
 	"github.com/Ignaciocl/tp1SisdisCommons/fileManager"
 	commonHealthcheck "github.com/Ignaciocl/tp1SisdisCommons/healthcheck"
@@ -9,57 +9,16 @@ import (
 	"github.com/Ignaciocl/tp1SisdisCommons/queue"
 	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	log "github.com/sirupsen/logrus"
+	"io"
 	"os"
 	"strings"
 )
 
 const (
-	serviceName     = "accumulator-weather"
-	storageFilename = "weather_accumulator.csv"
+	serviceName        = "accumulator-weather"
+	storageFilename    = "weather_accumulator.csv"
+	eofStorageFilename = "eof.csv"
 )
-
-type WeatherDuration struct {
-	Total              int    `json:"total"`
-	Duration           int    `json:"duration"`
-	Id                 int64  `json:"id"`
-	LastIdempotencyKey string `json:"last_idempotency_key"`
-}
-type Receivable struct {
-	Data WeatherDuration `json:"data"`
-	common.EofData
-	ClientID string `json:"client_id"`
-}
-
-func (r *WeatherDuration) GetId() int64 {
-	return r.Id
-}
-
-func (r *WeatherDuration) SetId(id int64) {
-	r.Id = id
-}
-
-type AccumulatorData struct {
-	Duration float64 `json:"duration"`
-	ClientID string  `json:"client_id"`
-	common.EofData
-}
-
-type t struct {
-}
-
-func (t t) ToWritable(data *WeatherDuration) []byte {
-	d, _ := json.Marshal(data)
-	return d
-}
-
-func (t t) FromWritable(d []byte) *WeatherDuration {
-	data := strings.Split(string(d), "-impos-")[0]
-	var r WeatherDuration
-	if err := json.Unmarshal([]byte(data), &r); err != nil {
-		utils.LogError(err, "could not unmarshal from db")
-	}
-	return &r
-}
 
 func main() {
 	id := os.Getenv("id")
@@ -67,19 +26,30 @@ func main() {
 	aq, _ := queue.InitializeSender[AccumulatorData]("accumulator", 0, nil, "rabbit")
 	sfe, _ := common.CreateConsumerEOF([]common.NextToNotify{{"accumulator", aq}}, "weatherAccumulator", inputQueue, 3) //  three cities
 	grace, _ := common.CreateGracefulManager("rabbit")
-	db, _ := fileManager.CreateDB[*WeatherDuration](t{}, storageFilename, 300, "-impos-")
+	acc := WeatherDuration{
+		Total:    0,
+		Duration: 0,
+		Id:       -1,
+	}
+	db, _ := fileManager.CreateDB[*WeatherDuration](t{}, storageFilename, 300, Sep)
+	if accumulated, err := db.ReadLine(); err == nil {
+		acc = *accumulated
+	}
 	defer grace.Close()
 	defer common.RecoverFromPanic(grace, "")
 	defer sfe.Close()
 	defer inputQueue.Close()
 	defer aq.Close()
 	ik, err := keyChecker.CreateIdempotencyChecker(10)
+	eofDb, err := fileManager.CreateDB[*eofData](t2{}, eofStorageFilename, 300, Sep)
 	utils.FailOnError(err, "could not create idempotency checker")
-	acc := WeatherDuration{
-		Total:    0,
-		Duration: 0,
-		Id:       -1,
+	act := actionable{
+		acc: &acc,
+		q:   aq,
+		key: id,
+		c:   []cleanable{db, ik, eofDb},
 	}
+	utils.FailOnError(propagateEof(eofDb, &act, sfe), "could not propagate eof")
 	go func() {
 		for {
 			data, msgId, err := inputQueue.ReceiveMessage()
@@ -88,22 +58,30 @@ func main() {
 				continue
 			}
 			if data.EOF {
+				if !strings.HasSuffix(data.IdempotencyKey, id) {
+					log.Infof("eof received from another client: %s, not propagating", data.IdempotencyKey)
+					utils.LogError(inputQueue.AckMessage(msgId), "could not acked message")
+					continue
+				}
 				log.Infof("eof is received: %s", data.IdempotencyKey)
-				sfe.AnswerEofOk(id, &actionable{
-					acc: &acc,
-					q:   aq,
-					key: id,
-				})
+				utils.LogError(eofDb.Write(&eofData{
+					IdempotencyKey: id,
+					Id:             0,
+				}), "couldn't write into eof db")
+				sfe.AnswerEofOk(id, &act)
 				utils.LogError(inputQueue.AckMessage(msgId), "error while acking msg")
 				continue
 			}
 			if ik.IsKey(data.IdempotencyKey) {
-				// log.Infof("%v already exists on map", data)
+				log.Infof("%v already exists on map", data)
+				utils.LogError(inputQueue.AckMessage(msgId), "error while acking msg")
+				continue
 			}
-			//if data.IdempotencyKey == acc.LastIdempotencyKey {
-			//	utils.LogError(ik.AddKey(data.IdempotencyKey), "could not add idempotency key")
-			//	continue
-			//}
+			if data.IdempotencyKey == acc.LastIdempotencyKey {
+				utils.LogError(ik.AddKey(data.IdempotencyKey), "could not add idempotency key")
+				utils.LogError(inputQueue.AckMessage(msgId), "error while acking msg")
+				continue
+			}
 			acc.Total += data.Data.Total
 			acc.Duration += data.Data.Duration
 			acc.LastIdempotencyKey = data.IdempotencyKey
@@ -120,4 +98,18 @@ func main() {
 	}()
 
 	grace.WaitForSigterm()
+}
+
+func propagateEof(db fileManager.Manager[*eofData], act *actionable, sfe common.WaitForEof) error {
+	for {
+		line, err := db.ReadLine()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return err
+		}
+		sfe.AnswerEofOk(line.IdempotencyKey, act)
+	}
+	return nil
 }
