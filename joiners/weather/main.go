@@ -3,6 +3,7 @@ package main
 import (
 	common "github.com/Ignaciocl/tp1SisdisCommons"
 	"github.com/Ignaciocl/tp1SisdisCommons/fileManager"
+	commonHealthcheck "github.com/Ignaciocl/tp1SisdisCommons/healthcheck"
 	"github.com/Ignaciocl/tp1SisdisCommons/queue"
 	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	"github.com/pkg/errors"
@@ -11,6 +12,11 @@ import (
 	"os"
 	"strconv"
 	"strings"
+)
+
+const (
+	serviceName     = "joiner-weather"
+	storageFilename = "weather_joiner.csv"
 )
 
 func (sd *weatherDuration) add(duration int) {
@@ -75,11 +81,16 @@ func (a actionable) DoActionIfEOF() {
 }
 
 func main() {
+	id := os.Getenv("id")
+	if id == "" {
+		panic("missing weather joiner ID")
+	}
+
 	workerWeather, err := strconv.Atoi(os.Getenv("amountWeatherWorkers"))
 	utils.FailOnError(err, "missing env value of worker stations")
 	workerTrips, err := strconv.Atoi(os.Getenv("amountTripsWorkers"))
 	utils.FailOnError(err, "missing env value of worker trips")
-	csvReader, err := fileManager.CreateCSVFileManager[JoinerDataStation](transformer{}, "ponemeElNombreLicha.csv")
+	csvReader, err := fileManager.CreateCSVFileManager[JoinerDataStation](transformer{}, storageFilename)
 	utils.FailOnError(err, "could not load csv file")
 	acc := make(map[string]weatherDuration)
 	tripTurn := make(chan struct{}, 1)
@@ -90,7 +101,6 @@ func main() {
 		nc: tripTurn,
 	}, workerWeather)
 	log.Info("data filled with info previously set")
-	id := os.Getenv("id")
 	connection, _ := queue.InitializeConnectionRabbit(nil, "rabbit")
 	inputQueue, _ := queue.InitializeReceiver[JoinerDataStation]("weatherQueue", "", id, "", connection)
 	inputTrips, _ := queue.InitializeReceiver[JoinerDataStation]("weatherQueueTrip", "", id, "", connection)
@@ -156,18 +166,26 @@ func main() {
 			}
 			s := <-tripTurn
 			t := getTripsToSend(data, acc)
-			utils.LogError(aq.SendMessage(ToAccWeather{
-				Data: t,
-				EofData: common.EofData{
-					EOF:            false,
-					IdempotencyKey: data.IdempotencyKey,
-				},
-				Key: id,
-			}, id), "could not send message to accumulator")
+			if t.Total > 0 {
+				utils.LogError(aq.SendMessage(ToAccWeather{
+					Data: t,
+					EofData: common.EofData{
+						EOF:            false,
+						IdempotencyKey: data.IdempotencyKey,
+					},
+					ClientID: id,
+				}, id), "could not send message to accumulator")
+			}
 			utils.LogError(inputTrips.AckMessage(msgId), "could not acked message")
 			tripTurn <- s
 		}
 	}() // For trip
+
+	healthCheckReplier := commonHealthcheck.InitHealthCheckerReplier(serviceName + id)
+	go func() {
+		err := healthCheckReplier.Run()
+		utils.FailOnError(err, "health check error")
+	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
 	common.WaitForSigterm(grace)

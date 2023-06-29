@@ -2,16 +2,19 @@ package main
 
 import (
 	common "github.com/Ignaciocl/tp1SisdisCommons"
+	commonHealthcheck "github.com/Ignaciocl/tp1SisdisCommons/healthcheck"
 	"github.com/Ignaciocl/tp1SisdisCommons/queue"
 	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	log "github.com/sirupsen/logrus"
 )
 
+const serviceName = "accumulator-main"
+
 type Accumulator struct {
 	Stations    []string `json:"stations,omitempty"`
 	AvgStations []string `json:"avg_stations,omitempty"`
 	Duration    *float64 `json:"duration"`
-	Key         string   `json:"key"`
+	ClientID    string   `json:"client_Id"`
 	common.EofData
 }
 
@@ -23,19 +26,19 @@ type QueryResponse struct {
 
 func processData(data Accumulator, acc map[string]QueryResponse) {
 	if data.Stations != nil {
-		d := getQueryResponse(data.Key, acc)
+		d := getQueryResponse(data.ClientID, acc)
 		d.Montreal = data.Stations
-		acc[data.Key] = d
+		acc[data.ClientID] = d
 		log.Infof("received response query from montreal (query3): %v", d)
 	} else if data.AvgStations != nil {
-		d := getQueryResponse(data.Key, acc)
+		d := getQueryResponse(data.ClientID, acc)
 		d.Avg = data.AvgStations
-		acc[data.Key] = d
+		acc[data.ClientID] = d
 		log.Infof("received response query from stations (query2): %v", d)
 	} else if data.Duration != nil {
-		d := getQueryResponse(data.Key, acc)
+		d := getQueryResponse(data.ClientID, acc)
 		d.AvgMore30 = data.Duration
-		acc[data.Key] = d
+		acc[data.ClientID] = d
 		log.Infof("received response query from weather (query1): %v", d)
 	}
 }
@@ -49,7 +52,8 @@ func getQueryResponse(key string, acc map[string]QueryResponse) QueryResponse {
 }
 
 type QueryResult struct {
-	Data QueryResponse `json:"query_result"`
+	Data     QueryResponse `json:"query_result"`
+	ClientId string        `json:"client_id"`
 }
 
 type actionable struct {
@@ -93,9 +97,16 @@ func main() {
 	}()
 	go func() {
 		key := <-ns
-		qr := QueryResult{Data: acc[key]}
+		qr := QueryResult{Data: acc[key], ClientId: key}
+		log.Infof("sending to server data: %+v, ps data: Licha puto", qr)
 
 		accumulatorInfo.SendMessage(qr, "")
+	}()
+
+	healthCheckerReplier := commonHealthcheck.InitHealthCheckerReplier(serviceName)
+	go func() {
+		err := healthCheckerReplier.Run()
+		utils.FailOnError(err, "health check error")
 	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")

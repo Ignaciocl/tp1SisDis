@@ -24,3 +24,5 @@ go.work
 client/files
 venv
 *.DS_Store*
+
+datasets

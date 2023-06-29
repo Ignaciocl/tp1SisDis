@@ -4,6 +4,7 @@ import (
 	"fmt"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
 	"github.com/Ignaciocl/tp1SisdisCommons/fileManager"
+	commonHealthcheck "github.com/Ignaciocl/tp1SisdisCommons/healthcheck"
 	"github.com/Ignaciocl/tp1SisdisCommons/queue"
 	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	"github.com/pkg/errors"
@@ -12,6 +13,11 @@ import (
 	"os"
 	"strconv"
 	"strings"
+)
+
+const (
+	serviceName     = "joiner-stations"
+	storageFilename = "stations_joiner.csv"
 )
 
 func (s *stationAlive) shouldBeConsidered() bool {
@@ -85,9 +91,9 @@ func processDataTrips(data JoinerDataStation, w *mapHolder, aq queue.Sender[PreA
 			})
 		}
 		aq.SendMessage(PreAccumulatorData{
-			Data:    v,
-			Key:     data.IdempotencyKey,
-			EofData: common.EofData{IdempotencyKey: data.IdempotencyKey},
+			Data:     v,
+			ClientID: data.ClientID,
+			EofData:  common.EofData{IdempotencyKey: data.IdempotencyKey},
 		}, id)
 	}
 }
@@ -106,11 +112,15 @@ func (a actionable) DoActionIfEOF() {
 }
 
 func main() {
+	id := os.Getenv("id")
+	if id == "" {
+		panic("missing ID in stations joiner")
+	}
 	workerStation, err := strconv.Atoi(os.Getenv("amountStationsWorkers"))
 	utils.FailOnError(err, "missing env value of worker stations")
 	workerTrips, err := strconv.Atoi(os.Getenv("amountTripsWorkers"))
 	utils.FailOnError(err, "missing env value of worker trips")
-	csvReader, err := fileManager.CreateCSVFileManager[JoinerDataStation](transformer{}, "ponemeElNombreLicha.csv")
+	csvReader, err := fileManager.CreateCSVFileManager[JoinerDataStation](transformer{}, storageFilename)
 	utils.FailOnError(err, "could not load csv file")
 	acc := map[string]stationData{}
 	tt := make(chan struct{}, 1)
@@ -123,7 +133,6 @@ func main() {
 		nc: tt,
 	}, workerStation)
 	log.Info("data filled with info previously set")
-	id := os.Getenv("id")
 	inputQueue, _ := queue.InitializeReceiver[JoinerDataStation]("stationsQueue", "rabbit", id, "", nil)
 	inputQueueTrip, _ := queue.InitializeReceiver[JoinerDataStation]("stationsQueueTrip", "rabbit", id, "", nil)
 	aq, _ := queue.InitializeSender[PreAccumulatorData]("preAccumulatorSt", 0, nil, "rabbit")
@@ -190,6 +199,13 @@ func main() {
 			tt <- p
 		}
 	}()
+
+	healthCheckerReplier := commonHealthcheck.InitHealthCheckerReplier(serviceName + id)
+	go func() {
+		err := healthCheckerReplier.Run()
+		utils.FailOnError(err, "health check error")
+	}()
+
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
 	common.WaitForSigterm(grace)
 }

@@ -24,7 +24,7 @@ services:
       rabbit:
         condition: service_healthy
     environment:
-      - distributors=3
+      - LOG_LEVEL=DEBUG
     networks:
       - bikers
     ports:
@@ -33,14 +33,29 @@ services:
     volumes:
       - './server/main.go:/app/main.go'
 
-  diosito:
+  #  diosito:
+  #    build:
+  #      context: ./healthchecker/
+  #    container_name: diosito
+  #    depends_on:
+  #      - server
+  #    networks:
+  #      - bikers
+  #    volumes:
+  #      - './healthchecker/main.go:/app/main.go'
+  #      - '/var/run/docker.sock:/var/run/docker.sock'
+
+  client1:
     build:
-      context: ./healthchecker/
-    container_name: diosito
+      context: ./client/
+    container_name: client1
+    environment:
+      - CLIENT_ID=1
+      - LOG_LEVEL=DEBUG
+      - TEST_MODE=true
     depends_on:
       - server
     networks:
       - bikers
     volumes:
-      - './healthchecker/main.go:/app/main.go'
-      - '/var/run/docker.sock:/var/run/docker.sock'
+      - './datasets/:/client/datasets/'

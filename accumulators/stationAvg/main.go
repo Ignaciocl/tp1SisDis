@@ -5,6 +5,7 @@ import (
 	"fmt"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
 	"github.com/Ignaciocl/tp1SisdisCommons/fileManager"
+	commonHealthcheck "github.com/Ignaciocl/tp1SisdisCommons/healthcheck"
 	"github.com/Ignaciocl/tp1SisdisCommons/keyChecker"
 	"github.com/Ignaciocl/tp1SisdisCommons/queue"
 	"github.com/Ignaciocl/tp1SisdisCommons/utils"
@@ -13,9 +14,11 @@ import (
 	"os"
 )
 
-type cleanable interface {
-	Clear()
-}
+const (
+	serviceName        = "accumulator-stations"
+	storageFilename    = "stations_accumulator.csv"
+	eofStorageFilename = "eof.csv"
+)
 
 type ReceivableDataStation struct {
 	Name string `json:"name"`
@@ -29,20 +32,19 @@ type JoinerDataStation struct {
 
 type AccumulatorData struct {
 	AvgStations []string `json:"avg_stations"`
-	Key         string   `json:"key"`
+	ClientID    string   `json:"client_id"`
 	common.EofData
 }
 
 func processData(data JoinerDataStation, acc map[string]stationData, db fileManager.Manager[*stationData]) {
 	if data.DataStation == nil {
+		log.Infof("station received is nil")
 		return
 	}
-	currentRunValues := map[string]bool{}
-	for _, ds := range data.DataStation {
-		//_, alreadyUsedThisRun := currentRunValues[ds.Name]
-		if d, ok := acc[ds.Name]; ok {
-			currentRunValues[ds.Name] = true
-			d.LastSetIdempotencyKey = data.IdempotencyKey
+	for i, ds := range data.DataStation {
+		ik := fmt.Sprintf("%s-%d", data.IdempotencyKey, i)
+		if d, ok := acc[ds.Name]; ok && (ik != d.LastSetIdempotencyKey) {
+			d.LastSetIdempotencyKey = ik
 			d.addYear(ds.Year)
 			utils.LogError(db.Write(&d), "could not write into db")
 			acc[ds.Name] = d
@@ -51,7 +53,7 @@ func processData(data JoinerDataStation, acc map[string]stationData, db fileMana
 				SweetSixteen:          0,
 				SadSeventeen:          0,
 				Name:                  ds.Name,
-				LastSetIdempotencyKey: data.IdempotencyKey,
+				LastSetIdempotencyKey: ik,
 			}
 			nd.addYear(ds.Year)
 			utils.LogError(db.Write(&nd), "could not write into db")
@@ -64,7 +66,6 @@ type actionable struct {
 	acc map[string]stationData
 	id  string
 	aq  queue.Sender[AccumulatorData]
-	c   []cleanable
 }
 
 func (a actionable) DoActionIfEOF() {
@@ -81,7 +82,7 @@ func (a actionable) DoActionIfEOF() {
 	}
 	l := AccumulatorData{
 		AvgStations: v,
-		Key:         a.id,
+		ClientID:    a.id,
 		EofData: common.EofData{
 			IdempotencyKey: fmt.Sprintf("key:%s-amount:%d", a.id, len(savedData)),
 		},
@@ -89,17 +90,14 @@ func (a actionable) DoActionIfEOF() {
 
 	log.Infof("sending message to accumulator")
 	utils.LogError(a.aq.SendMessage(l, ""), "could not send message to accumulator")
-	for _, v := range a.c {
-		v.Clear()
-	}
 }
 
 func main() {
 	id := os.Getenv("id")
-	db, err := fileManager.CreateDB[*stationData](t{}, "cambiameAcaLicha", 300, Sep)
+	db, err := fileManager.CreateDB[*stationData](t{}, storageFilename, 300, Sep)
 	utils.FailOnError(err, "could not create db")
 	acc := map[string]stationData{}
-	eofDb, err := fileManager.CreateDB[*eofData](t2{}, "cambiameAcaLichaEOF", 300, Sep)
+	eofDb, err := fileManager.CreateDB[*eofData](t2{}, eofStorageFilename, 300, Sep)
 	ik, err := keyChecker.CreateIdempotencyChecker(20)
 	utils.FailOnError(err, "could not create db")
 	inputQueue, _ := queue.InitializeReceiver[JoinerDataStation]("preAccumulatorSt", "rabbit", id, "", nil)
@@ -115,7 +113,6 @@ func main() {
 		acc: acc,
 		aq:  aq,
 		id:  id,
-		c:   []cleanable{db, eofDb, ik},
 	}
 	utils.FailOnError(fillData(acc, db, eofDb, sfe, actionableEOF), "could not fill with data from the db")
 	go func() {
@@ -143,6 +140,12 @@ func main() {
 			utils.LogError(ik.AddKey(data.IdempotencyKey), "could not store idempotency key")
 			utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 		}
+	}()
+
+	healthCheckerReplier := commonHealthcheck.InitHealthCheckerReplier(serviceName + id)
+	go func() {
+		err := healthCheckerReplier.Run()
+		utils.FailOnError(err, "health check error")
 	}()
 
 	log.Infof("waiting for messages")

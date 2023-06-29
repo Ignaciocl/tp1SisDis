@@ -20,8 +20,8 @@ func (a *actionable) DoActionIfEOF() {
 		duration = float64(a.acc.Duration) / float64(a.acc.Total)
 	}
 	data := AccumulatorData{
-		Dur: duration,
-		Key: a.key,
+		Duration: duration,
+		ClientID: a.key,
 		EofData: common.EofData{
 			EOF:            false,
 			IdempotencyKey: fmt.Sprintf("key:%s-duration:%f", a.key, duration),

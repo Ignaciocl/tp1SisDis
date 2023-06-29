@@ -1,0 +1,35 @@
+protocol: 'tcp'
+input_port: 9000
+output_port: 3334
+packet_limit: 8192 # 8 * 1024
+max_active_clients: 5
+
+# Fin messages from client
+input_data_fin_messages:
+  - 'FIN-weather'
+  - 'FIN-stations'
+  - 'FIN-trips'
+  - 'FIN-processing'
+
+finish_processing_message: 'FIN-processing'
+
+ack_message: "PONG"
+data_delimiter: "|"
+
+connection_string: 'rabbit'
+keep_trying_message: '{"continue": true}'
+
+sender_config:
+  consumer: 'distributor'
+  amount_of_distributors: 3
+
+receiver_config:
+  queue_name: 'accConnection'
+  routing_key: ''
+  topic: ''
+
+publisher_config:
+  exchange_name: 'distributor'
+  routing_key: 'eof'
+  topic: 'topic'
+

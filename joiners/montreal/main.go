@@ -4,6 +4,7 @@ import (
 	"fmt"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
 	"github.com/Ignaciocl/tp1SisdisCommons/fileManager"
+	commonHealthcheck "github.com/Ignaciocl/tp1SisdisCommons/healthcheck"
 	"github.com/Ignaciocl/tp1SisdisCommons/queue"
 	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	"github.com/pkg/errors"
@@ -12,6 +13,11 @@ import (
 	"os"
 	"strconv"
 	"strings"
+)
+
+const (
+	storageFilename = "montreal_joiner.csv"
+	serviceName     = "joiner-montreal"
 )
 
 type AccumulatorInfo struct {
@@ -76,15 +82,18 @@ func (a actionable) DoActionIfEOF() {
 }
 
 func main() {
+	id := os.Getenv("id")
+	if id == "" {
+		panic("missing Montreal Joiner ID")
+	}
 	amountCalc, err := strconv.Atoi(os.Getenv("calculators"))
 	utils.FailOnError(err, "missing env value of calculator")
 	workerStation, err := strconv.Atoi(os.Getenv("amountStationsWorkers"))
 	utils.FailOnError(err, "missing env value of worker stations")
 	workerTrips, err := strconv.Atoi(os.Getenv("amountTripsWorkers"))
 	utils.FailOnError(err, "missing env value of worker trips")
-	id := os.Getenv("id")
 	acc := make(map[string]sData)
-	csvReader, err := fileManager.CreateCSVFileManager[JoinerDataStation](transformer{}, "ponemeElNombreLicha.csv")
+	csvReader, err := fileManager.CreateCSVFileManager[JoinerDataStation](transformer{}, storageFilename)
 	utils.FailOnError(err, "could not load csv file")
 	tt := make(chan struct{}, 1)
 	st := make(chan struct{}, 1)
@@ -157,6 +166,12 @@ func main() {
 			utils.LogError(inputQueueTrip.AckMessage(msgId), "failed while trying ack")
 			tt <- d
 		}
+	}()
+
+	healthCheckerReplier := commonHealthcheck.InitHealthCheckerReplier(serviceName + id)
+	go func() {
+		err := healthCheckerReplier.Run()
+		utils.FailOnError(err, "health check error")
 	}()
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")

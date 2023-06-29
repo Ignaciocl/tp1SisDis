@@ -1,0 +1,20 @@
+protocol: 'tcp'
+server_address: 'localhost:9000'
+server_response_address: 'localhost:3334'
+packet_limit: 8192 # 8 * 1024
+max_connection_retries: 15
+retry_delay: 3s
+
+batch_size: 50
+server_ack: 'PONG'
+csv_delimiter: ','
+data_delimiter: '|'
+
+fin_ack_messages:
+  weather: 'FIN-weather'
+  stations: 'FIN-stations'
+  trips: 'FIN-trips'
+  finish: 'FIN-processing'
+
+query_results_message: 'getResults'
+keep_asking_response: 'KEEP-ASKING'

@@ -1,140 +1,73 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
+	commonDtos "github.com/Ignaciocl/tp1SisdisCommons/dtos"
+	commonHealthcheck "github.com/Ignaciocl/tp1SisdisCommons/healthcheck"
 	"github.com/Ignaciocl/tp1SisdisCommons/queue"
 	"github.com/Ignaciocl/tp1SisdisCommons/utils"
-	"log"
+	log "github.com/sirupsen/logrus"
 	"os"
 	"strconv"
-	"strings"
+	"worker-trips/internal/dtos"
+	tripErrors "worker-trips/internal/errors"
+	"worker-trips/internal/filter"
+	"worker-trips/internal/transformer"
 )
 
-func getDate(date string) string {
-	return strings.Split(date, " ")[0]
-}
+const (
+	idEnvVar         = "id"
+	logLevelEnvVar   = "LOG_LEVEL"
+	defaultLogLevel  = "DEBUG"
+	serviceName      = "worker-trip"
+	montrealStation  = "montreal"
+	connectionString = "rabbit"
+	lowerBoundYear   = 2016
+	upperBoundYear   = 2017
+)
 
-type Trip struct {
-	OStation string  `json:"start_station_code"`
-	EStation string  `json:"end_station_code"`
-	Duration float64 `json:"duration_sec,string"`
-	Year     int     `json:"yearid,string"`
-	Date     string  `json:"start_date"`
-}
-
-type WorkerTrip struct {
-	City string `json:"city"`
-	Data []Trip `json:"data,omitempty"`
-	Key  string `json:"key"`
-	common.EofData
-}
-
-type SendableDataMontreal struct {
-	OStation string `json:"o_station"`
-	EStation string `json:"e_station"`
-	Year     int    `json:"year"`
-}
-
-type SendableDataAvg struct {
-	Station string `json:"station"`
-	Year    int    `json:"year"`
-}
-
-type SendableDataWeather struct {
-	Duration int32  `json:"duration"`
-	Date     string `json:"date"`
-}
-
-type JoinerData[T any] struct {
-	Data []T    `json:"tripData"`
-	Key  string `json:"key"`
-	City string `json:"city,omitempty"`
-	common.EofData
-}
-
-const MontrealStation = "montreal"
-
-func processData(
-	trip WorkerTrip,
-	qm queue.Sender[JoinerData[SendableDataMontreal]],
-	qs queue.Sender[JoinerData[SendableDataAvg]],
-	qt queue.Sender[JoinerData[SendableDataWeather]]) {
-	buildMontreal := trip.City == MontrealStation
-	batchSize := len(trip.Data)
-	vm := make([]SendableDataMontreal, 0, batchSize)
-	vy := make([]SendableDataAvg, 0, batchSize)
-	va := make([]SendableDataWeather, 0, batchSize)
-	for _, v := range trip.Data {
-		if buildMontreal {
-			vm = append(vm, SendableDataMontreal{
-				OStation: v.OStation,
-				EStation: v.EStation,
-				Year:     v.Year,
-			})
-		}
-		if v.Year == 2016 || v.Year == 2017 {
-			vy = append(vy, SendableDataAvg{
-				Station: v.OStation,
-				Year:    v.Year,
-			})
-		}
-		if v.Duration <= 0 {
-			v.Duration = 0
-		}
-		va = append(va, SendableDataWeather{
-			Duration: int32(v.Duration),
-			Date:     getDate(v.Date),
-		})
-	}
-
-	if trip.City == MontrealStation {
-		err := qm.SendMessage(JoinerData[SendableDataMontreal]{
-			Key: trip.Key,
-			EofData: common.EofData{
-				EOF:            false,
-				IdempotencyKey: trip.IdempotencyKey,
-			},
-			Data: vm,
-		}, trip.Key)
-		if err != nil {
-			utils.FailOnError(err, "Couldn't send message to joiner montreal, failing horribly")
-		}
-	}
-	err := qs.SendMessage(JoinerData[SendableDataAvg]{
-		Key: trip.Key,
-		EofData: common.EofData{
-			EOF:            false,
-			IdempotencyKey: trip.IdempotencyKey,
-		},
-		Data: vy,
-		City: trip.City,
-	}, trip.Key)
+// InitLogger Receives the log level to be set in logrus as a string. This method
+// parses the string and set the level to the logger. If the level string is not
+// valid an error is returned
+func InitLogger(logLevel string) error {
+	level, err := log.ParseLevel(logLevel)
 	if err != nil {
-		utils.FailOnError(err, "Couldn't send message to joiner stations, failing horribly")
+		return err
 	}
-	err = qt.SendMessage(JoinerData[SendableDataWeather]{
-		Key: trip.Key,
-		EofData: common.EofData{
-			EOF:            false,
-			IdempotencyKey: trip.IdempotencyKey,
-		},
-		City: trip.City,
-		Data: va,
-	}, trip.Key)
-	if err != nil {
-		utils.FailOnError(err, "Couldn't send message to joiner stations, failing horribly")
+
+	customFormatter := &log.TextFormatter{
+		TimestampFormat: "2006-01-02 15:04:05",
+		FullTimestamp:   false,
 	}
+	log.SetFormatter(customFormatter)
+	log.SetLevel(level)
+	return nil
 }
 
 func main() {
+	/*logLevel := os.Getenv(logLevelEnvVar)
+	if logLevel == "" {
+		logLevel = defaultLogLevel
+	}*/
+	logLevel := defaultLogLevel
 
-	id := os.Getenv("id")
+	if err := InitLogger(logLevel); err != nil {
+		panic(fmt.Sprintf("error initializing logger: %v", err))
+	}
+
+	id := os.Getenv(idEnvVar)
+	if id == "" {
+		panic("missing Trip Worker ID")
+	}
+
 	distributors, err := strconv.Atoi(os.Getenv("distributors"))
 	utils.FailOnError(err, "missing env value of distributors")
-	inputQueue, _ := queue.InitializeReceiver[WorkerTrip]("tripWorkers", "rabbit", id, "", nil)
-	outputQueueMontreal, _ := queue.InitializeSender[JoinerData[SendableDataMontreal]]("montrealQueueTrip", 0, nil, "rabbit") // Change this, should be empty, also for other workers
-	outputQueueStations, _ := queue.InitializeSender[JoinerData[SendableDataAvg]]("stationsQueueTrip", 0, nil, "rabbit")      // Change this, should be empty, also for other workers
-	outputQueueWeather, _ := queue.InitializeSender[JoinerData[SendableDataWeather]]("weatherQueueTrip", 0, nil, "rabbit")    // Change this, should be empty, also for other workers
+	inputQueue, _ := queue.InitializeReceiver[dtos.InputData]("tripWorkers", connectionString, id, "", nil)
+	outputQueueMontreal, _ := queue.InitializeSender[dtos.JoinerData[dtos.SendableDataMontreal]]("montrealQueueTrip", 0, nil, connectionString)   // Change this, should be empty, also for other workers
+	outputQueueStations, _ := queue.InitializeSender[dtos.JoinerData[dtos.SendableDataDuplicates]]("stationsQueueTrip", 0, nil, connectionString) // Change this, should be empty, also for other workers
+	outputQueueWeather, _ := queue.InitializeSender[dtos.JoinerData[dtos.SendableDataRainfall]]("weatherQueueTrip", 0, nil, connectionString)     // Change this, should be empty, also for other workers
 	v := make([]common.NextToNotify, 0, 3)
 	v = append(v, common.NextToNotify{
 		Name:       "montrealQueueTrip",
@@ -146,8 +79,9 @@ func main() {
 		Name:       "weatherQueueTrip",
 		Connection: outputQueueWeather,
 	})
+
 	iqEOF, _ := common.CreateConsumerEOF(v, "tripWorkers", inputQueue, distributors)
-	grace, _ := common.CreateGracefulManager("rabbit")
+	grace, _ := common.CreateGracefulManager(connectionString)
 	defer grace.Close()
 	defer common.RecoverFromPanic(grace, "")
 	defer iqEOF.Close()
@@ -163,16 +97,138 @@ func main() {
 				utils.FailOnError(err, "Failed while receiving message")
 				continue
 			}
+
+			metadata := data.Metadata
+
 			if data.EOF {
 				iqEOF.AnswerEofOk(data.IdempotencyKey, nil)
 				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 				continue
 			}
-			processData(data, outputQueueMontreal, outputQueueStations, outputQueueWeather)
+
+			// Transform raw data into TripData
+			var tripsData []dtos.TripData
+			for _, rawTripData := range data.Data {
+
+				tripData, err := transformer.Transform(rawTripData)
+				if err != nil {
+					if errors.Is(err, tripErrors.ErrInvalidTripData) {
+						log.Debug("Invalid trip data")
+						continue
+					}
+					log.Errorf("Error transforming raw trip data: %v", err)
+					panic(err)
+				}
+
+				tripsData = append(tripsData, *tripData)
+			}
+
+			if len(tripsData) == 0 {
+				// Nothing to do
+				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
+				continue
+			}
+
+			extraData := utils.GetMetadataFromMessage(data.Data[0]) // all have the same client ID
+
+			sendData(
+				extraData.ClientID,
+				metadata,
+				tripsData,
+				outputQueueMontreal, outputQueueStations, outputQueueWeather)
 			utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 		}
 	}()
 
+	healthCheckerReplier := commonHealthcheck.InitHealthCheckerReplier(serviceName + id)
+	go func() {
+		err := healthCheckerReplier.Run()
+		utils.FailOnError(err, "healthchecker error")
+	}()
+
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
 	common.WaitForSigterm(grace)
+}
+
+// sendData sends data to next stages , only if it's valid, through different senders
+func sendData(
+	clientID string,
+	metadata commonDtos.Metadata,
+	tripsData []dtos.TripData,
+	montrealSender queue.Sender[dtos.JoinerData[dtos.SendableDataMontreal]],
+	duplicatesSender queue.Sender[dtos.JoinerData[dtos.SendableDataDuplicates]],
+	rainfallSender queue.Sender[dtos.JoinerData[dtos.SendableDataRainfall]]) {
+
+	buildMontreal := metadata.GetCity() == montrealStation
+	batchSize := len(tripsData)
+
+	montrealData := make([]dtos.SendableDataMontreal, 0, batchSize)
+	duplicatesData := make([]dtos.SendableDataDuplicates, 0, batchSize)
+	rainfallData := make([]dtos.SendableDataRainfall, 0, batchSize)
+
+	for _, trip := range tripsData {
+		if buildMontreal {
+			montrealData = append(montrealData, dtos.NewSendableDataMontrealFromTrip(trip))
+		}
+
+		if yearInRange(trip.Year, lowerBoundYear, upperBoundYear) {
+			duplicatesData = append(duplicatesData, dtos.NewSendableDataDuplicatesFromTrip(trip))
+		}
+
+		if filter.ValidDuration(trip) {
+			rainfallData = append(rainfallData, dtos.NewSendableDataRainfallFromTrip(trip))
+		}
+	}
+
+	if buildMontreal && len(montrealData) > 0 {
+		err := montrealSender.SendMessage(dtos.JoinerData[dtos.SendableDataMontreal]{
+			ClientID: clientID,
+			Data:     montrealData,
+			City:     metadata.GetCity(),
+			EofData: common.EofData{
+				IdempotencyKey: metadata.GetIdempotencyKey(),
+				EOF:            metadata.IsEOF(),
+			},
+		}, clientID)
+
+		if err != nil {
+			utils.FailOnError(err, "Couldn't send message from Trip Worker to Montreal Joiner, failing horribly")
+		}
+	}
+
+	if len(duplicatesData) > 0 {
+		err := duplicatesSender.SendMessage(dtos.JoinerData[dtos.SendableDataDuplicates]{
+			ClientID: clientID,
+			Data:     duplicatesData,
+			City:     metadata.GetCity(),
+			EofData: common.EofData{
+				IdempotencyKey: metadata.GetIdempotencyKey(),
+				EOF:            metadata.IsEOF(),
+			},
+		}, clientID)
+
+		if err != nil {
+			utils.FailOnError(err, "Couldn't send message from Trip Worker to Stations Joiner, failing horribly")
+		}
+	}
+
+	if len(rainfallData) > 0 {
+		err := rainfallSender.SendMessage(dtos.JoinerData[dtos.SendableDataRainfall]{
+			ClientID: clientID,
+			Data:     rainfallData,
+			City:     metadata.GetCity(),
+			EofData: common.EofData{
+				IdempotencyKey: metadata.GetIdempotencyKey(),
+				EOF:            metadata.IsEOF(),
+			},
+		}, clientID)
+
+		if err != nil {
+			utils.FailOnError(err, "Couldn't send message from Trip Worker to Rainfall Joiner, failing horribly")
+		}
+	}
+}
+
+func yearInRange(year int, lowerBoundYear int, upperBoundYear int) bool {
+	return lowerBoundYear <= year && year <= upperBoundYear
 }

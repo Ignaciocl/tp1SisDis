@@ -2,6 +2,7 @@ package main
 
 import (
 	common "github.com/Ignaciocl/tp1SisdisCommons"
+	commonHealthcheck "github.com/Ignaciocl/tp1SisdisCommons/healthcheck"
 	"github.com/Ignaciocl/tp1SisdisCommons/queue"
 	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	log "github.com/sirupsen/logrus"
@@ -10,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 )
+
+const serviceName = "calculator"
 
 type JoinerData struct {
 	OLat  string `json:"o_lat"`
@@ -102,5 +105,12 @@ func main() {
 			utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 		}
 	}()
+
+	healthCheckerReplier := commonHealthcheck.InitHealthCheckerReplier(serviceName + id)
+	go func() {
+		err := healthCheckerReplier.Run()
+		utils.FailOnError(err, "health check error")
+	}()
+
 	common.WaitForSigterm(grace)
 }

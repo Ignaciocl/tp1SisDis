@@ -34,7 +34,7 @@ func (hc *HealthChecker) Run() error {
 
 		err := setConnection(socket, hc.config.MaxConnectionRetries, hc.config.ConnectionRetryDelay)
 		if err != nil {
-			return err
+			return fmt.Errorf("%w: could not establish connection with %s", err, serviceName)
 		}
 
 		waitGroup.Add(1)
@@ -117,11 +117,11 @@ func (hc *HealthChecker) checkServiceStatus(socket common.Client, errorChannel c
 				retryTicker = time.NewTicker(hc.config.RetryDelay)
 				continue
 			}
-			log.Debugf("got heartbeat response '%s'", string(response))
+			log.Debugf("[service: %s] got heartbeat response '%s'", serviceName, string(response))
 			retriesCounter = 0
 
 		case <-retryTicker.C:
-			log.Debug("Some error occurs, trying again...")
+			log.Debugf("[service: %s] Some error occurs, trying again...", serviceName)
 			retriesCounter += 1
 			err := socket.Send(heartbeatBytes)
 			if err != nil {

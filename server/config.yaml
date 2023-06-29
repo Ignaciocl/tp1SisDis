@@ -1,7 +1,0 @@
-# id: 1
-server:
-  address: ":9000"
-  addressPolling: ":3334"
-log:
-  level: "debug"
-

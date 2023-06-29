@@ -5,7 +5,7 @@ services:
   accumulator-main:
     build:
       context: ./accumulators/mainAccumulator
-    container_name: accumulatorMain
+    container_name: accumulator-main
     depends_on:
       rabbit:
         condition: service_healthy
@@ -16,7 +16,7 @@ services:
   accumulator-montreal1:
     build:
       context: ./accumulators/montreal
-    container_name: accumulatorMontreal1
+    container_name: accumulator-montreal1
     depends_on:
       rabbit:
         condition: service_healthy
@@ -28,7 +28,7 @@ services:
   accumulator-stations1:
     build:
       context: ./accumulators/stationAvg
-    container_name: accumulatorStationAvg1
+    container_name: accumulator-stations1
     depends_on:
       rabbit:
         condition: service_healthy
@@ -79,6 +79,7 @@ services:
       rabbit:
         condition: service_healthy
     environment:
+    - LOG_LEVEL=INFO
     - id=1
     volumes:
       - './distributor/main.go:/app/main.go'
@@ -92,6 +93,7 @@ services:
       rabbit:
         condition: service_healthy
     environment:
+    - LOG_LEVEL=INFO
     - id=2
     volumes:
       - './distributor/main.go:/app/main.go'
@@ -105,6 +107,7 @@ services:
       rabbit:
         condition: service_healthy
     environment:
+    - LOG_LEVEL=INFO
     - id=3
     volumes:
       - './distributor/main.go:/app/main.go'
@@ -113,7 +116,7 @@ services:
   joiner-montreal1:
     build:
       context: ./joiners/montreal
-    container_name: joinerMontreal1
+    container_name: joiner-montreal1
     depends_on:
       rabbit:
         condition: service_healthy
@@ -130,7 +133,7 @@ services:
   joiner-stations1:
     build:
       context: ./joiners/stations
-    container_name: joinerStation1
+    container_name: joiner-stations1
     depends_on:
       rabbit:
         condition: service_healthy
@@ -143,7 +146,7 @@ services:
   joiner-stations2:
     build:
       context: ./joiners/stations
-    container_name: joinerStation2
+    container_name: joiner-stations2
     depends_on:
       rabbit:
         condition: service_healthy
@@ -156,7 +159,7 @@ services:
   joiner-weather1:
     build:
       context: ./joiners/weather
-    container_name: joinerWeather1
+    container_name: joiner-weather1
     depends_on:
       rabbit:
         condition: service_healthy
@@ -187,11 +190,11 @@ services:
       rabbit:
         condition: service_healthy
     environment:
-    - distributors=3
+      - LOG_LEVEL=DEBUG
     networks:
     - bikers
     ports:
-    - 3034:9000
+    - 9000:9000
     - 3334:3334
     volumes:
       - './server/main.go:/app/main.go'
@@ -207,6 +210,7 @@ services:
     environment:
     - id=1
     - distributors=3
+    - LOG_LEVEL=INFO
     networks:
     - bikers
   worker-station2:
@@ -221,6 +225,7 @@ services:
     environment:
     - id=2
     - distributors=3
+    - LOG_LEVEL=INFO
     networks:
     - bikers
   worker-station3:
@@ -235,6 +240,7 @@ services:
     environment:
     - id=3
     - distributors=3
+    - LOG_LEVEL=INFO
     networks:
     - bikers
   worker-trip1:
@@ -247,6 +253,7 @@ services:
     environment:
     - id=1
     - distributors=3
+    - LOG_LEVEL=INFO
     networks:
     - bikers
   worker-trip2:
@@ -259,6 +266,7 @@ services:
     environment:
     - id=2
     - distributors=3
+    - LOG_LEVEL=INFO
     networks:
     - bikers
   worker-trip3:
@@ -271,6 +279,7 @@ services:
     environment:
     - id=3
     - distributors=3
+    - LOG_LEVEL=INFO
     networks:
     - bikers
   worker-weather1:
@@ -283,6 +292,7 @@ services:
     environment:
     - id=1
     - distributors=3
+    - LOG_LEVEL=INFO
     networks:
     - bikers
   worker-weather2:
@@ -295,6 +305,7 @@ services:
     environment:
     - id=2
     - distributors=3
+    - LOG_LEVEL=INFO
     networks:
     - bikers
   worker-weather3:
@@ -307,12 +318,13 @@ services:
     environment:
     - id=3
     - distributors=3
+    - LOG_LEVEL=INFO
     networks:
     - bikers
   accumulator-weather1:
     build:
       context: ./accumulators/weather
-    container_name: accumulatorWeather1
+    container_name: accumulator-weather1
     depends_on:
       rabbit:
         condition: service_healthy
@@ -323,3 +335,30 @@ services:
       - './accumulators/weather/actionable.go:/app/actionable.go'
     networks:
       - bikers
+
+#  diosito:
+#    build:
+#      context: ./healthchecker/
+#    container_name: diosito
+#    depends_on:
+#      - server
+#    networks:
+#      - bikers
+#    volumes:
+#      - './healthchecker/main.go:/app/main.go'
+#      - '/var/run/docker.sock:/var/run/docker.sock'
+
+#  client1:
+#    build:
+#      context: ./client/
+#    container_name: client1
+#    environment:
+#      - CLIENT_ID=1
+#      - LOG_LEVEL=DEBUG
+#      - TEST_MODE=true
+#    depends_on:
+#      - server
+#    networks:
+#      - bikers
+#    volumes:
+#      - './datasets/:/client/datasets/'
