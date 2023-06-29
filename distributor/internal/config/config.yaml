@@ -4,5 +4,5 @@ worker_queues:
   weather: 'weatherWorkers'
   stations: 'stationWorkers'
 
-max_amount_receivers: 3
+max_amount_receivers: 5
 necessary_amount: 1
