@@ -63,6 +63,7 @@ type AccumulatorData struct {
 
 type AccumulatorInfo struct {
 	Data []AccumulatorData `json:"data"`
+	common.EofData
 }
 
 func getAccumulatorData(data []JoinerData) []AccumulatorData {
@@ -101,7 +102,7 @@ func main() {
 			}
 			ad := getAccumulatorData(data.Data)
 			keys := strings.Split(data.IdempotencyKey, "-")
-			aq.SendMessage(AccumulatorInfo{Data: ad}, keys[len(keys)-1])
+			aq.SendMessage(AccumulatorInfo{Data: ad, EofData: common.EofData{IdempotencyKey: data.IdempotencyKey}}, keys[len(keys)-1])
 			utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 		}
 	}()
