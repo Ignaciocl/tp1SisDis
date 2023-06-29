@@ -64,7 +64,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	clientID := os.Getenv(clientIDEnvVar)
+	clientID := os.Args[1]
 	if clientID == "" {
 		fmt.Printf("error missing client ID")
 		return
