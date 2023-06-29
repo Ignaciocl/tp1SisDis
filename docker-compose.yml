@@ -13,6 +13,7 @@ services:
     - bikers
     volumes:
     - ./accumulators/mainAccumulator/main.go/:/app/main.go
+
   accumulator-montreal1:
     build:
       context: ./accumulators/montreal
@@ -25,6 +26,20 @@ services:
     - id=1
     networks:
     - bikers
+
+  accumulator-montreal2:
+    build:
+      context: ./accumulators/montreal
+    container_name: accumulator-montreal2
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+      - calculators=3
+      - id=2
+    networks:
+      - bikers
+
   accumulator-stations1:
     build:
       context: ./accumulators/stationAvg
@@ -38,6 +53,21 @@ services:
     - ./accumulators/stationAvg/main.go/:/app/main.go
     environment:
       - id=1
+
+  accumulator-stations2:
+    build:
+      context: ./accumulators/stationAvg
+    container_name: accumulator-stations2
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    networks:
+      - bikers
+    volumes:
+      - ./accumulators/stationAvg/main.go/:/app/main.go
+    environment:
+      - id=2
+
   calculator1:
     build:
       context: ./calculator
@@ -71,6 +101,7 @@ services:
     - id=3
     networks:
     - bikers
+
   distributor1:
     build:
       context: ./distributor
@@ -113,6 +144,7 @@ services:
       - './distributor/main.go:/app/main.go'
     networks:
     - bikers
+
   joiner-montreal1:
     build:
       context: ./joiners/montreal
@@ -130,6 +162,25 @@ services:
       - './joiners/montreal/dto.go:/app/dto.go'
     networks:
       - bikers
+
+  joiner-montreal2:
+    build:
+      context: ./joiners/montreal
+    container_name: joiner-montreal2
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+      - calculators=3
+      - amountStationsWorkers=3
+      - amountTripsWorkers=3
+      - id=2
+    volumes:
+      - './joiners/montreal/main.go:/app/main.go'
+      - './joiners/montreal/dto.go:/app/dto.go'
+    networks:
+      - bikers
+
   joiner-stations1:
     build:
       context: ./joiners/stations
@@ -143,6 +194,7 @@ services:
       - id=1
     networks:
       - bikers
+
   joiner-stations2:
     build:
       context: ./joiners/stations
@@ -156,6 +208,7 @@ services:
     - id=2
     networks:
     - bikers
+
   joiner-weather1:
     build:
       context: ./joiners/weather
@@ -169,6 +222,21 @@ services:
       - id=1
     networks:
       - bikers
+
+  joiner-weather2:
+    build:
+      context: ./joiners/weather
+    container_name: joiner-weather2
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+      - amountWeatherWorkers=3
+      - amountTripsWorkers=3
+      - id=2
+    networks:
+      - bikers
+
   rabbit:
     container_name: rabbitContainer
     healthcheck:
@@ -321,6 +389,7 @@ services:
     - LOG_LEVEL=INFO
     networks:
     - bikers
+
   accumulator-weather1:
     build:
       context: ./accumulators/weather
@@ -336,29 +405,59 @@ services:
     networks:
       - bikers
 
-#  diosito:
-#    build:
-#      context: ./healthchecker/
-#    container_name: diosito
-#    depends_on:
-#      - server
-#    networks:
-#      - bikers
-#    volumes:
-#      - './healthchecker/main.go:/app/main.go'
-#      - '/var/run/docker.sock:/var/run/docker.sock'
+  accumulator-weather2:
+    build:
+      context: ./accumulators/weather
+    container_name: accumulator-weather2
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    environment:
+      - id=2
+    volumes:
+      - './accumulators/weather/main.go:/app/main.go'
+      - './accumulators/weather/actionable.go:/app/actionable.go'
+    networks:
+      - bikers
 
-#  client1:
-#    build:
-#      context: ./client/
-#    container_name: client1
-#    environment:
-#      - CLIENT_ID=1
-#      - LOG_LEVEL=DEBUG
-#      - TEST_MODE=true
-#    depends_on:
-#      - server
-#    networks:
-#      - bikers
-#    volumes:
-#      - './datasets/:/client/datasets/'
+  diosito:
+    build:
+      context: ./healthchecker/
+    container_name: diosito
+    depends_on:
+      - server
+    networks:
+      - bikers
+    volumes:
+      - './healthchecker/main.go:/app/main.go'
+      - '/var/run/docker.sock:/var/run/docker.sock'
+
+  client1:
+    build:
+      context: ./client/
+    container_name: client1
+    environment:
+      - CLIENT_ID=1
+      - LOG_LEVEL=DEBUG
+      - TEST_MODE=true
+    networks:
+      - bikers
+    depends_on:
+      - server
+    volumes:
+      - './datasets/:/client/datasets/'
+
+  client2:
+    build:
+      context: ./client/
+    container_name: client2
+    environment:
+      - CLIENT_ID=2
+      - LOG_LEVEL=DEBUG
+      - TEST_MODE=true
+    networks:
+      - bikers
+    depends_on:
+      - server
+    volumes:
+      - './datasets/:/client/datasets/'

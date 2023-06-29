@@ -64,11 +64,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	clientID := "1" // ToDo: use the if when it's all fixed. Licha
-	/*if clientID == "" {
+	clientID := os.Getenv(clientIDEnvVar)
+	if clientID == "" {
 		fmt.Printf("error missing client ID")
 		return
-	}*/
+	}
 
 	clientConfig, err := LoadClientConfig()
 	if err != nil {

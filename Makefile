@@ -2,7 +2,7 @@ SHELL := /bin/bash
 PWD := $(shell pwd)
 
 start-app:
-	docker-compose up -d
+	docker-compose -f docker-compose.yml up -d
 .PHONY: start-app
 
 stop-app:

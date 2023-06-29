@@ -1,6 +1,6 @@
 protocol: 'tcp'
-server_address: 'localhost:9000'
-server_response_address: 'localhost:3334'
+server_address: 'server:9000'
+server_response_address: 'server:3334'
 packet_limit: 8192 # 8 * 1024
 max_connection_retries: 15
 retry_delay: 3s
