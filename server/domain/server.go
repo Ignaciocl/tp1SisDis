@@ -93,16 +93,18 @@ func (s *Server) Run() error {
 	}
 
 	go func() {
-		result, id, err := accumulatorInfo.ReceiveMessage()
-		if err != nil {
-			log.Errorf("%s: %v", errReceivingData, err)
-			return
-		}
+		for {
+			result, id, err := accumulatorInfo.ReceiveMessage()
+			if err != nil {
+				log.Errorf("%s: %v", errReceivingData, err)
+				return
+			}
 
-		d, _ := json.Marshal(result)
-		log.Infof("data received from accumulator: %+v\n%s", result, string(d))
-		dataQuery.WriteQueryValue(result.QueryResult, result.ClientId)
-		utils.LogError(accumulatorInfo.AckMessage(id), "could not ack message")
+			d, _ := json.Marshal(result)
+			log.Infof("data received from accumulator: %+v\n%s", result, string(d))
+			dataQuery.WriteQueryValue(result.QueryResult, result.ClientId)
+			utils.LogError(accumulatorInfo.AckMessage(id), "could not ack message")
+		}
 	}()
 
 	go s.receiveData(dataReceiverSocket, eofStarter, sender)
