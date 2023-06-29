@@ -102,13 +102,21 @@ func getStationKey(stationCode string, year int, city string) string {
 	return fmt.Sprintf("%s-%s-%d", stationCode, city, year)
 }
 
+type clearable interface {
+	Clear()
+}
+
 type actionable struct {
 	c  chan struct{}
 	nc chan struct{}
+	cl clearable
 }
 
 func (a actionable) DoActionIfEOF() {
 	a.nc <- <-a.c // continue the loop
+	if a.cl != nil {
+		a.cl.Clear()
+	}
 }
 
 func main() {
@@ -185,6 +193,7 @@ func main() {
 				tfe.AnswerEofOk(data.IdempotencyKey, actionable{
 					c:  tt,
 					nc: st,
+					cl: csvReader,
 				})
 				utils.LogError(inputQueueTrip.AckMessage(msgId), "failed while trying ack")
 				continue

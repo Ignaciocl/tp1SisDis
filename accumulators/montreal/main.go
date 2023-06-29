@@ -84,6 +84,7 @@ func main() {
 					q:   outputQueue,
 					acc: acc,
 					id:  id,
+					c:   []cleanable{db, eofDb, ik},
 				})
 				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 				continue
@@ -124,8 +125,10 @@ func main() {
 
 func checkIdempotencyKey(ik string, d dStation) bool {
 	lastIdempotencyDecompress := strings.Split(d.LastIdempotencyKey, "-")
+	id1, _ := strconv.Atoi(lastIdempotencyDecompress[1])
 	lastIKDecompress := strings.Split(ik, "-")
+	id2, _ := strconv.Atoi(lastIKDecompress[1])
 	return ik != d.LastIdempotencyKey &&
 		((lastIdempotencyDecompress[0] != lastIKDecompress[0]) ||
-			(lastIKDecompress[1] > lastIdempotencyDecompress[1]))
+			(id2 > id1))
 }

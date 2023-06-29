@@ -65,10 +65,15 @@ func getTripsToSend(data JoinerDataStation, accumulator map[string]weatherDurati
 	return toSend
 }
 
+type clearable interface {
+	Clear()
+}
+
 type actionable struct {
 	c  chan struct{}
 	nc chan struct{}
 	m  map[string]weatherDuration
+	cl clearable
 }
 
 func (a actionable) DoActionIfEOF() {
@@ -78,6 +83,9 @@ func (a actionable) DoActionIfEOF() {
 		}
 	}
 	a.nc <- <-a.c // continue the loop
+	if a.cl != nil {
+		a.cl.Clear()
+	}
 }
 
 func main() {
@@ -156,6 +164,7 @@ func main() {
 					c:  tripTurn,
 					nc: weatherTurn,
 					m:  acc,
+					cl: csvReader,
 				})
 				inputTrips.AckMessage(msgId)
 				continue

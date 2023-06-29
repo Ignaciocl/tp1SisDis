@@ -27,4 +27,7 @@ func (a actionable) DoActionIfEOF() {
 	for _, c := range a.c {
 		c.Clear()
 	}
+	for k := range a.acc {
+		delete(a.acc, k)
+	}
 }

@@ -12,6 +12,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -65,10 +66,14 @@ func processData(data JoinerDataStation, acc map[string]stationData, db fileMana
 
 func checkIdempotencyKey(ik string, d stationData) bool {
 	lastIdempotencyDecompress := strings.Split(d.LastSetIdempotencyKey, "-")
+	id1, err := strconv.Atoi(lastIdempotencyDecompress[1])
+	utils.LogError(err, "sos un pelotudo")
 	lastIKDecompress := strings.Split(ik, "-")
+	id2, err := strconv.Atoi(lastIKDecompress[1])
+	utils.LogError(err, "rt")
 	return ik != d.LastSetIdempotencyKey &&
 		((lastIdempotencyDecompress[0] != lastIKDecompress[0]) ||
-			(lastIKDecompress[1] > lastIdempotencyDecompress[1]))
+			(id2 > id1))
 }
 
 type cleanable interface {
@@ -107,6 +112,9 @@ func (a actionable) DoActionIfEOF() {
 	for _, c := range a.c {
 		c.Clear()
 	}
+	for k := range a.acc {
+		delete(a.acc, k)
+	}
 }
 
 func main() {
@@ -130,6 +138,7 @@ func main() {
 		acc: acc,
 		aq:  aq,
 		id:  id,
+		c:   []cleanable{db, eofDb, ik},
 	}
 	utils.FailOnError(fillData(acc, db, eofDb, sfe, actionableEOF), "could not fill with data from the db")
 	go func() {

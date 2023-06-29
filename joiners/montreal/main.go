@@ -72,13 +72,21 @@ func obtainInfoToSend(accumulator map[string]sData, trip SendableDataTrip) (Accu
 
 }
 
+type clearable interface {
+	Clear()
+}
+
 type actionable struct {
 	c  chan struct{}
 	nc chan struct{}
+	cl clearable
 }
 
 func (a actionable) DoActionIfEOF() {
 	a.nc <- <-a.c // continue the loop
+	if a.cl != nil {
+		a.cl.Clear()
+	}
 }
 
 func main() {
@@ -153,6 +161,7 @@ func main() {
 				tfe.AnswerEofOk(data.IdempotencyKey, actionable{
 					c:  tt,
 					nc: st,
+					cl: csvReader,
 				})
 				utils.LogError(inputQueueTrip.AckMessage(msgId), "failed while trying ack")
 				continue

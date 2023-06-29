@@ -20,7 +20,7 @@ import (
 const (
 	idEnvVar         = "id"
 	logLevelEnvVar   = "LOG_LEVEL"
-	defaultLogLevel  = "DEBUG"
+	defaultLogLevel  = "INFO"
 	serviceName      = "worker-trip"
 	montrealStation  = "montreal"
 	connectionString = "rabbit"
