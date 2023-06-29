@@ -44,7 +44,7 @@ func processData(data JoinerDataStation, acc map[string]stationData, db fileMana
 		return
 	}
 	for i, ds := range data.DataStation {
-		ik := fmt.Sprintf("%s-%d", data.IdempotencyKey, i)
+		ik := fmt.Sprintf("%s|%d", data.IdempotencyKey, i)
 		if d, ok := acc[ds.Name]; ok && checkIdempotencyKey(ik, d) {
 			d.LastSetIdempotencyKey = ik
 			d.addYear(ds.Year)
@@ -65,12 +65,10 @@ func processData(data JoinerDataStation, acc map[string]stationData, db fileMana
 }
 
 func checkIdempotencyKey(ik string, d stationData) bool {
-	lastIdempotencyDecompress := strings.Split(d.LastSetIdempotencyKey, "-")
-	id1, err := strconv.Atoi(lastIdempotencyDecompress[1])
-	utils.LogError(err, "sos un pelotudo")
-	lastIKDecompress := strings.Split(ik, "-")
-	id2, err := strconv.Atoi(lastIKDecompress[1])
-	utils.LogError(err, "rt")
+	lastIdempotencyDecompress := strings.Split(d.LastSetIdempotencyKey, "|")
+	id1, _ := strconv.Atoi(lastIdempotencyDecompress[1])
+	lastIKDecompress := strings.Split(ik, "|")
+	id2, _ := strconv.Atoi(lastIKDecompress[1])
 	return ik != d.LastSetIdempotencyKey &&
 		((lastIdempotencyDecompress[0] != lastIKDecompress[0]) ||
 			(id2 > id1))
@@ -159,6 +157,7 @@ func main() {
 				continue
 			}
 			if ik.IsKey(data.IdempotencyKey) {
+				log.Infof("idempotency key already existed: %s", data.IdempotencyKey)
 				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 				continue
 			}

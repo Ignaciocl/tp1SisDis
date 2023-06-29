@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
 	"github.com/Ignaciocl/tp1SisdisCommons/fileManager"
@@ -9,6 +10,7 @@ import (
 	"github.com/Ignaciocl/tp1SisdisCommons/queue"
 	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	log "github.com/sirupsen/logrus"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -60,7 +62,6 @@ func main() {
 	utils.FailOnError(err, "could not create db")
 	acc := make(map[string]dStation)
 	eofDb, err := fileManager.CreateDB[*eofData](t2{}, eofStorageFilename, 300, Sep)
-	// todo fillData missing
 	ik, err := keyChecker.CreateIdempotencyChecker(20)
 	utils.FailOnError(err, "could not create db")
 	inputQueue, _ := queue.InitializeReceiver[AccumulatorInfo]("preAccumulatorMontreal", "rabbit", id, "", nil)
@@ -72,6 +73,13 @@ func main() {
 	defer me.Close()
 	defer inputQueue.Close()
 	defer outputQueue.Close()
+	act := actionable{
+		q:   outputQueue,
+		acc: acc,
+		id:  id,
+		c:   []cleanable{db, eofDb, ik},
+	}
+	utils.FailOnError(fillData(eofDb, db, acc, me, act), "could not fill data")
 	go func() {
 		for {
 			dataInfo, msgId, err := inputQueue.ReceiveMessage()
@@ -80,12 +88,7 @@ func main() {
 					IdempotencyKey: id,
 					Id:             0,
 				}), "could not update eof database")
-				me.AnswerEofOk(id, actionable{
-					q:   outputQueue,
-					acc: acc,
-					id:  id,
-					c:   []cleanable{db, eofDb, ik},
-				})
+				me.AnswerEofOk(id, act)
 				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 				continue
 			}
@@ -99,7 +102,7 @@ func main() {
 				continue
 			}
 			for i, d := range dataInfo.Data {
-				idk := fmt.Sprintf("%s-%d", dataInfo.IdempotencyKey, i)
+				idk := fmt.Sprintf("%s|%d", dataInfo.IdempotencyKey, i)
 				if data, ok := acc[d.EndingStation]; ok && !checkIdempotencyKey(idk, data) {
 					continue
 				}
@@ -123,10 +126,34 @@ func main() {
 	common.WaitForSigterm(grace)
 }
 
+func fillData(eofDb fileManager.Manager[*eofData], db fileManager.Manager[*dStation], acc map[string]dStation, me common.WaitForEof, act actionable) error {
+	for {
+		line, err := db.ReadLine()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return err
+		}
+		acc[line.Station] = *line
+	}
+	for {
+		line, err := eofDb.ReadLine()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return err
+		}
+		me.AnswerEofOk(line.IdempotencyKey, act)
+	}
+	return nil
+}
+
 func checkIdempotencyKey(ik string, d dStation) bool {
-	lastIdempotencyDecompress := strings.Split(d.LastIdempotencyKey, "-")
+	lastIdempotencyDecompress := strings.Split(d.LastIdempotencyKey, "|")
 	id1, _ := strconv.Atoi(lastIdempotencyDecompress[1])
-	lastIKDecompress := strings.Split(ik, "-")
+	lastIKDecompress := strings.Split(ik, "|")
 	id2, _ := strconv.Atoi(lastIKDecompress[1])
 	return ik != d.LastIdempotencyKey &&
 		((lastIdempotencyDecompress[0] != lastIKDecompress[0]) ||

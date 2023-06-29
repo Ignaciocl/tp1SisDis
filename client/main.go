@@ -104,5 +104,5 @@ func main() {
 		return
 	}
 
-	log.Info("Well, that's all folks! Ci vediamo")
+	log.Info("Well, that")
 }
