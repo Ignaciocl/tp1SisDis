@@ -98,6 +98,7 @@ func main() {
 	go func() {
 		key := <-ns
 		qr := QueryResult{Data: acc[key], ClientId: key}
+		log.Infof("sending to server data: %+v, ps data: Licha puto", qr)
 
 		accumulatorInfo.SendMessage(qr, "")
 	}()

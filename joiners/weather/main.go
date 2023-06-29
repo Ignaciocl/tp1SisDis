@@ -166,14 +166,16 @@ func main() {
 			}
 			s := <-tripTurn
 			t := getTripsToSend(data, acc)
-			utils.LogError(aq.SendMessage(ToAccWeather{
-				Data: t,
-				EofData: common.EofData{
-					EOF:            false,
-					IdempotencyKey: data.IdempotencyKey,
-				},
-				ClientID: id,
-			}, id), "could not send message to accumulator")
+			if t.Total > 0 {
+				utils.LogError(aq.SendMessage(ToAccWeather{
+					Data: t,
+					EofData: common.EofData{
+						EOF:            false,
+						IdempotencyKey: data.IdempotencyKey,
+					},
+					ClientID: id,
+				}, id), "could not send message to accumulator")
+			}
 			utils.LogError(inputTrips.AckMessage(msgId), "could not acked message")
 			tripTurn <- s
 		}

@@ -38,14 +38,13 @@ type AccumulatorData struct {
 
 func processData(data JoinerDataStation, acc map[string]stationData, db fileManager.Manager[*stationData]) {
 	if data.DataStation == nil {
+		log.Infof("station received is nil")
 		return
 	}
-	currentRunValues := map[string]bool{}
-	for _, ds := range data.DataStation {
-		_, alreadyUsedThisRun := currentRunValues[ds.Name]
-		if d, ok := acc[ds.Name]; ok && (data.IdempotencyKey != d.LastSetIdempotencyKey || alreadyUsedThisRun) {
-			currentRunValues[ds.Name] = true
-			d.LastSetIdempotencyKey = data.IdempotencyKey
+	for i, ds := range data.DataStation {
+		ik := fmt.Sprintf("%s-%d", data.IdempotencyKey, i)
+		if d, ok := acc[ds.Name]; ok && (ik != d.LastSetIdempotencyKey) {
+			d.LastSetIdempotencyKey = ik
 			d.addYear(ds.Year)
 			utils.LogError(db.Write(&d), "could not write into db")
 			acc[ds.Name] = d
@@ -54,7 +53,7 @@ func processData(data JoinerDataStation, acc map[string]stationData, db fileMana
 				SweetSixteen:          0,
 				SadSeventeen:          0,
 				Name:                  ds.Name,
-				LastSetIdempotencyKey: data.IdempotencyKey,
+				LastSetIdempotencyKey: ik,
 			}
 			nd.addYear(ds.Year)
 			utils.LogError(db.Write(&nd), "could not write into db")

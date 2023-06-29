@@ -12,6 +12,7 @@ type DataToSend struct {
 
 type AccumulatorData struct {
 	QueryResult map[string]interface{} `json:"query_result"`
+	ClientId    string                 `json:"client_id"`
 }
 
 type DataQuery struct {
