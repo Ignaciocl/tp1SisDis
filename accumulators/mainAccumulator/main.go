@@ -102,7 +102,7 @@ func main() {
 	accumulatorInfo, _ := queue.InitializeSender[QueryResult]("accConnection", 0, nil, "rabbit")
 	grace, _ := common.CreateGracefulManager("rabbit")
 	acc := make(map[string]QueryResponse)
-	ns := make(chan string, 1)
+	ns := make(chan string, 6)
 	db, err := fileManager.CreateDB[*Accumulator](t{}, "accumulator_store.csv", 100000, Sep) // reinvent a new db just for the accumulator, this is a hotfix
 	utils.FailOnError(err, "could not create db")
 	utils.FailOnError(fillData(acc, ns, db, me), "could not read from db")
@@ -131,12 +131,14 @@ func main() {
 		}
 	}()
 	go func() {
-		key := <-ns
-		qr := QueryResult{Data: acc[key], ClientId: key}
-		log.Infof("sending to server data: %+v", qr)
+		for {
+			key := <-ns
+			qr := QueryResult{Data: acc[key], ClientId: key}
+			log.Infof("sending to server data: %+v", qr)
 
-		utils.FailOnError(accumulatorInfo.SendMessage(qr, ""), "could not report to server, panicking")
-		delete(acc, key)
+			utils.FailOnError(accumulatorInfo.SendMessage(qr, ""), "could not report to server, panicking")
+			delete(acc, key)
+		}
 	}()
 
 	healthCheckerReplier := commonHealthcheck.InitHealthCheckerReplier(serviceName)
