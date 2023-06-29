@@ -669,7 +669,7 @@ services:
   worker-station5:
     build:
       context: ./workers/worker-stations
-    container_name: worker-station3
+    container_name: worker-station5
     volumes:
       - './workers/worker-stations/main.go:/app/main.go'
     depends_on:
