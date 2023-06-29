@@ -143,6 +143,11 @@ func main() {
 		for {
 			data, msgId, err := inputQueue.ReceiveMessage()
 			if data.EOF {
+				if !strings.HasSuffix(data.IdempotencyKey, id) {
+					log.Infof("eof received from another client: %s, not propagating", data.IdempotencyKey)
+					utils.LogError(inputQueue.AckMessage(msgId), "could not acked message")
+					continue
+				}
 				idempotencyKey := id
 				utils.LogError(eofDb.Write(&eofData{
 					IdempotencyKey: idempotencyKey,

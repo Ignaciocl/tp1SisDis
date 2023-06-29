@@ -11,6 +11,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"io"
 	"os"
+	"strings"
 )
 
 const (
@@ -57,6 +58,11 @@ func main() {
 				continue
 			}
 			if data.EOF {
+				if !strings.HasSuffix(data.IdempotencyKey, id) {
+					log.Infof("eof received from another client: %s, not propagating", data.IdempotencyKey)
+					utils.LogError(inputQueue.AckMessage(msgId), "could not acked message")
+					continue
+				}
 				log.Infof("eof is received: %s", data.IdempotencyKey)
 				utils.LogError(eofDb.Write(&eofData{
 					IdempotencyKey: id,
