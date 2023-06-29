@@ -12,6 +12,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"io"
 	"os"
+	"strings"
 )
 
 const (
@@ -43,7 +44,7 @@ func processData(data JoinerDataStation, acc map[string]stationData, db fileMana
 	}
 	for i, ds := range data.DataStation {
 		ik := fmt.Sprintf("%s-%d", data.IdempotencyKey, i)
-		if d, ok := acc[ds.Name]; ok && (ik != d.LastSetIdempotencyKey) {
+		if d, ok := acc[ds.Name]; ok && checkIdempotencyKey(ik, d) {
 			d.LastSetIdempotencyKey = ik
 			d.addYear(ds.Year)
 			utils.LogError(db.Write(&d), "could not write into db")
@@ -62,10 +63,23 @@ func processData(data JoinerDataStation, acc map[string]stationData, db fileMana
 	}
 }
 
+func checkIdempotencyKey(ik string, d stationData) bool {
+	lastIdempotencyDecompress := strings.Split(d.LastSetIdempotencyKey, "-")
+	lastIKDecompress := strings.Split(ik, "-")
+	return ik != d.LastSetIdempotencyKey &&
+		((lastIdempotencyDecompress[0] != lastIKDecompress[0]) ||
+			(lastIKDecompress[1] > lastIdempotencyDecompress[1]))
+}
+
+type cleanable interface {
+	Clear()
+}
+
 type actionable struct {
 	acc map[string]stationData
 	id  string
 	aq  queue.Sender[AccumulatorData]
+	c   []cleanable
 }
 
 func (a actionable) DoActionIfEOF() {
@@ -90,6 +104,9 @@ func (a actionable) DoActionIfEOF() {
 
 	log.Infof("sending message to accumulator")
 	utils.LogError(a.aq.SendMessage(l, ""), "could not send message to accumulator")
+	for _, c := range a.c {
+		c.Clear()
+	}
 }
 
 func main() {
@@ -133,8 +150,8 @@ func main() {
 				continue
 			}
 			if ik.IsKey(data.IdempotencyKey) {
-				// utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
-				// continue
+				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
+				continue
 			}
 			processData(data, acc, db)
 			utils.LogError(ik.AddKey(data.IdempotencyKey), "could not store idempotency key")

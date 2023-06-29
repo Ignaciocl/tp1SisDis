@@ -67,7 +67,15 @@ func main() {
 	aq, _ := queue.InitializeSender[AccumulatorData]("accumulator", 0, nil, "rabbit")
 	sfe, _ := common.CreateConsumerEOF([]common.NextToNotify{{"accumulator", aq}}, "weatherAccumulator", inputQueue, 3) //  three cities
 	grace, _ := common.CreateGracefulManager("rabbit")
+	acc := WeatherDuration{
+		Total:    0,
+		Duration: 0,
+		Id:       -1,
+	}
 	db, _ := fileManager.CreateDB[*WeatherDuration](t{}, storageFilename, 300, "-impos-")
+	if accumulated, err := db.ReadLine(); err == nil {
+		acc = *accumulated
+	}
 	defer grace.Close()
 	defer common.RecoverFromPanic(grace, "")
 	defer sfe.Close()
@@ -75,11 +83,7 @@ func main() {
 	defer aq.Close()
 	ik, err := keyChecker.CreateIdempotencyChecker(10)
 	utils.FailOnError(err, "could not create idempotency checker")
-	acc := WeatherDuration{
-		Total:    0,
-		Duration: 0,
-		Id:       -1,
-	}
+	//ToDo read from db here and propagate the eof
 	go func() {
 		for {
 			data, msgId, err := inputQueue.ReceiveMessage()
@@ -93,17 +97,21 @@ func main() {
 					acc: &acc,
 					q:   aq,
 					key: id,
+					c:   []cleanable{db, ik},
 				})
 				utils.LogError(inputQueue.AckMessage(msgId), "error while acking msg")
 				continue
 			}
 			if ik.IsKey(data.IdempotencyKey) {
-				// log.Infof("%v already exists on map", data)
+				log.Infof("%v already exists on map", data)
+				utils.LogError(ik.AddKey(data.IdempotencyKey), "could not add idempotency key")
+				continue
 			}
-			//if data.IdempotencyKey == acc.LastIdempotencyKey {
-			//	utils.LogError(ik.AddKey(data.IdempotencyKey), "could not add idempotency key")
-			//	continue
-			//}
+			if data.IdempotencyKey == acc.LastIdempotencyKey {
+				utils.LogError(ik.AddKey(data.IdempotencyKey), "could not add idempotency key")
+				utils.LogError(inputQueue.AckMessage(msgId), "error while acking msg")
+				continue
+			}
 			acc.Total += data.Data.Total
 			acc.Duration += data.Data.Duration
 			acc.LastIdempotencyKey = data.IdempotencyKey
