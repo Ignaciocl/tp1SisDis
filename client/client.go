@@ -162,8 +162,6 @@ func (c *Client) SendData() error {
 
 // sendWeathersData sends all the data about weathers from this client
 func (c *Client) sendWeatherData(city string) error {
-	/*for _, city := range cities {
-	}*/
 	weatherFilepath := c.getFilePath(city, weatherFile)
 	err := c.sendDataFromFile(weatherFilepath, city, weatherFile)
 	if err != nil {
@@ -183,8 +181,6 @@ func (c *Client) sendWeatherData(city string) error {
 
 // sendStationsData sends all the data about stations from this client
 func (c *Client) sendStationsData(city string) error {
-	/*for _, city := range cities {
-	}*/
 	stationsFilepath := c.getFilePath(city, stationsFile)
 	err := c.sendDataFromFile(stationsFilepath, city, stationsFile)
 	if err != nil {
@@ -204,9 +200,6 @@ func (c *Client) sendStationsData(city string) error {
 
 // sendTripsData sends all the data about trips from this client
 func (c *Client) sendTripsData(city string) error {
-	/*for _, city := range cities {
-
-	}*/
 	tripsFilepath := c.getFilePath(city, tripsFile)
 	err := c.sendDataFromFile(tripsFilepath, city, tripsFile)
 	if err != nil {
@@ -365,11 +358,6 @@ func (c *Client) sendFinMessage(dataType string, city string) error {
 			continue
 		}
 
-		/*if err != nil && !errors.Is(err, io.EOF) {
-			log.Errorf("error sending fin message %s: %v", finMessage, err)
-			continue
-		}*/
-
 		log.Debugf("[data sent: %s] waiting for server response to FIN MESSAGE %s", dataType, finMessage)
 		response, err := c.senderSocket.Listen()
 
@@ -381,11 +369,6 @@ func (c *Client) sendFinMessage(dataType string, city string) error {
 			}
 			continue
 		}
-
-		/*if err != nil && !errors.Is(err, io.EOF) {
-			log.Errorf("error waiting for server response to FIN message %s: %v", finMessage, err)
-			continue
-		}*/
 
 		if string(response) != c.config.ServerACK {
 			log.Errorf("error got unexpected response. Expected %s, got: %s", finMessage, string(response))
@@ -417,11 +400,6 @@ func (c *Client) sendBatch(batch []string) error {
 			continue
 		}
 
-		/*if err != nil && !errors.Is(err, io.EOF) {
-			log.Errorf("[city: %s] error sending batch: %v", debugCity, err)
-			continue
-		}*/
-
 		log.Debugf("[city: %s] data sent, waiting for server ACK", debugCity)
 		response, err := c.senderSocket.Listen()
 
@@ -433,11 +411,6 @@ func (c *Client) sendBatch(batch []string) error {
 			}
 			continue
 		}
-
-		/*if err != nil {
-			log.Debugf("[city: %s] error while wainting for server ACK: %s", debugCity, err.Error())
-			return err
-		}*/
 
 		if string(response) != c.config.ServerACK {
 			log.Errorf("error got unexpected response. Expected %s, got: %s. Retrying...", c.config.ServerACK, string(response))

@@ -133,8 +133,7 @@ func main() {
 	go func() {
 		key := <-ns
 		qr := QueryResult{Data: acc[key], ClientId: key}
-
-		log.Infof("sending to server data: %+v, ps data: Licha puto", qr)
+		log.Infof("sending to server data: %+v", qr)
 
 		utils.FailOnError(accumulatorInfo.SendMessage(qr, ""), "could not report to server, panicking")
 		delete(acc, key)

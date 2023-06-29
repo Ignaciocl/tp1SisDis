@@ -47,11 +47,10 @@ func InitLogger(logLevel string) error {
 }
 
 func main() {
-	/*logLevel := os.Getenv(logLevelEnvVar)
+	logLevel := os.Getenv(logLevelEnvVar)
 	if logLevel == "" {
 		logLevel = defaultLogLevel
-	}*/
-	logLevel := defaultLogLevel
+	}
 
 	if err := InitLogger(logLevel); err != nil {
 		panic(fmt.Sprintf("error initializing logger: %v", err))
