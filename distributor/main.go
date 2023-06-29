@@ -14,7 +14,7 @@ import (
 
 const (
 	logLevelEnvVar  = "LOG_LEVEL"
-	defaultLogLevel = "DEBUG"
+	defaultLogLevel = "INFO"
 	idEnvVar        = "id"
 	serviceName     = "distributor"
 	weatherData     = "weather"
@@ -27,24 +27,6 @@ type inputOutputData struct {
 	Metadata dtos.Metadata `json:"metadata"`
 	Data     []string      `json:"data"`
 }
-
-/*
-DELETE THIS WHEN IS SAFE
-func SendMessagesToQueue(data []interface{}, queue queue.Sender[SendableData], city string) {
-	for _, v := range data {
-		err := queue.SendMessage(SendableData{
-			City: city,
-			Data: v,
-			ClientID:  "1",
-		}
-		d.EOF = false
-		d.IdempotencyKey = fmt.Sprintf("%s-%d", ik, i)
-		err := queue.SendMessage(d, "")
-		if err != nil {
-			log.Errorf("error while sending a message to next step")
-		}
-	}
-}*/
 
 // InitLogger Receives the log level to be set in logrus as a string. This method
 // parses the string and set the level to the logger. If the level string is not
@@ -65,11 +47,10 @@ func InitLogger(logLevel string) error {
 }
 
 func main() {
-	/*logLevel := os.Getenv(logLevelEnvVar)
+	logLevel := os.Getenv(logLevelEnvVar)
 	if logLevel == "" {
 		logLevel = defaultLogLevel
-	}*/
-	logLevel := defaultLogLevel
+	}
 
 	if err := InitLogger(logLevel); err != nil {
 		panic(fmt.Sprintf("error initializing logger: %v", err))
@@ -149,8 +130,6 @@ func main() {
 				utils.FailOnError(err, "Failed while receiving message")
 				continue
 			}
-
-			//log.Debugf("received data: %+v, is eof: %v", data, data.Metadata.IsEOF())
 
 			metadata := data.Metadata
 

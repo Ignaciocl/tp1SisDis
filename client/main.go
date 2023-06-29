@@ -64,7 +64,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	clientID := "1"
+	clientID := "1" // ToDo: use the if when it's all fixed. Licha
 	/*if clientID == "" {
 		fmt.Printf("error missing client ID")
 		return

@@ -20,7 +20,7 @@ import (
 const (
 	idEnvVar         = "id"
 	logLevelEnvVar   = "LOG_LEVEL"
-	defaultLogLevel  = "DEBUG"
+	defaultLogLevel  = "INFO"
 	serviceName      = "worker-weather"
 	connectionString = "rabbit"
 )
@@ -44,11 +44,10 @@ func InitLogger(logLevel string) error {
 }
 
 func main() {
-	/*logLevel := os.Getenv(logLevelEnvVar)
+	logLevel := os.Getenv(logLevelEnvVar)
 	if logLevel == "" {
 		logLevel = defaultLogLevel
-	}*/
-	logLevel := defaultLogLevel
+	}
 
 	if err := InitLogger(logLevel); err != nil {
 		panic(fmt.Sprintf("error initializing logger: %v", err))
@@ -103,7 +102,7 @@ func main() {
 					log.Errorf("Error transforming raw weather data: %v", err)
 					panic(err)
 				}
-				
+
 				// 2. Get extra data contain in the message
 				rawMessageExtraData := utils.GetMetadataFromMessage(rawWeatherData)
 				metadata.IdempotencyKey = fmt.Sprintf( //clientID-batchNum-messageNum-city

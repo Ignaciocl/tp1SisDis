@@ -18,7 +18,6 @@ import (
 
 const (
 	serviceName = "server"
-	userID      = "3" // FIXME: delete this variable later
 )
 
 type closer interface {
@@ -102,7 +101,7 @@ func (s *Server) Run() error {
 
 		d, _ := json.Marshal(result)
 		log.Infof("data received from accumulator: %+v\n%s", result, string(d))
-		dataQuery.WriteQueryValue(result.QueryResult, result.ClientId) // FIXME: we need the clientID. Nacho
+		dataQuery.WriteQueryValue(result.QueryResult, result.ClientId)
 		utils.LogError(accumulatorInfo.AckMessage(id), "could not ack message")
 	}()
 
@@ -233,7 +232,7 @@ func (s *Server) handleInputData(messageHandler client.MessageHandler, eofStarte
 				Metadata: metadataEOF,
 			}
 
-			log.Debugf("EOF a mandar: %+v", eofData)
+			log.Infof("Sending EOF with the following metadata: %+v", eofData)
 
 			eofDataBytes, err := json.Marshal(eofData)
 			if err != nil {
@@ -241,7 +240,6 @@ func (s *Server) handleInputData(messageHandler client.MessageHandler, eofStarte
 				return err
 			}
 
-			log.Debugf("Publish config: %+v", publishingConfig)
 			err = eofStarter.Publish(publishingConfig.Exchange, eofDataBytes, publishingConfig.RoutingKey, publishingConfig.Topic)
 			if err != nil {
 				log.Error(getLogMessage("error publishing EOF", err))
