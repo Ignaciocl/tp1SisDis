@@ -848,14 +848,103 @@ services:
     volumes:
       - './server/main.go:/app/main.go'
 
-  diosito:
+  diosito1:
     build:
       context: ./healthchecker/
-    container_name: diosito
+    container_name: diosito1
     depends_on:
-      - server
+      - diosito3
     networks:
       - bikers
+    environment:
+      - ID=1
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - './healthchecker/main.go:/app/main.go'
+      - '/var/run/docker.sock:/var/run/docker.sock'
+
+  diosito2:
+    build:
+      context: ./healthchecker/
+    container_name: diosito2
+    depends_on:
+      - diosito3
+    networks:
+      - bikers
+    environment:
+      - ID=2
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - './healthchecker/main.go:/app/main.go'
+      - '/var/run/docker.sock:/var/run/docker.sock'
+
+  diosito3:
+    build:
+      context: ./healthchecker/
+    container_name: diosito3
+    depends_on:
+      - server
+      - accumulator-main
+      - accumulator-montreal1
+      - accumulator-montreal2
+      - accumulator-montreal3
+      - accumulator-montreal4
+      - accumulator-montreal5
+      - accumulator-stations1
+      - accumulator-stations2
+      - accumulator-stations3
+      - accumulator-stations4
+      - accumulator-stations5
+      - accumulator-weather1
+      - accumulator-weather2
+      - accumulator-weather3
+      - accumulator-weather4
+      - accumulator-weather5
+      - calculator1
+      - calculator2
+      - calculator3
+      - calculator4
+      - calculator5
+      - distributor1
+      - distributor2
+      - distributor3
+      - distributor4
+      - distributor5
+      - joiner-montreal1
+      - joiner-montreal2
+      - joiner-montreal3
+      - joiner-montreal4
+      - joiner-montreal5
+      - joiner-stations1
+      - joiner-stations2
+      - joiner-stations3
+      - joiner-stations4
+      - joiner-stations5
+      - joiner-weather1
+      - joiner-weather2
+      - joiner-weather3
+      - joiner-weather4
+      - joiner-weather5
+      - worker-station1
+      - worker-station2
+      - worker-station3
+      - worker-station4
+      - worker-station5
+      - worker-trip1
+      - worker-trip2
+      - worker-trip3
+      - worker-trip4
+      - worker-trip5
+      - worker-weather1
+      - worker-weather2
+      - worker-weather3
+      - worker-weather4
+      - worker-weather5
+    networks:
+      - bikers
+    environment:
+      - ID=3
+      - LOG_LEVEL=DEBUG
     volumes:
       - './healthchecker/main.go:/app/main.go'
       - '/var/run/docker.sock:/var/run/docker.sock'

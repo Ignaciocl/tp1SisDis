@@ -10,18 +10,20 @@ import (
 const configFilepath = "config/config.yaml"
 
 type HealthCheckerConfig struct {
-	Port                 int           `yaml:"healthcheck_port"`
-	Protocol             string        `yaml:"protocol"`
-	PacketLimit          int           `yaml:"packet_limit"`
-	Message              string        `yaml:"healthcheck_message"`
-	ExpectedResponse     string        `yaml:"healthcheck_response"`
-	MaxRetries           int           `yaml:"max_retries"`
-	MaxConnectionRetries int           `yaml:"max_connection_retries"`
-	RetryDelay           time.Duration `yaml:"retry_delay"`
-	ConnectionRetryDelay time.Duration `yaml:"connection_retry_delay"`
-	Interval             time.Duration `yaml:"interval"`
-	Services             []string      `yaml:"services"`
-	TTL                  int           `yaml:"ttl"`
+	Port                   int           `yaml:"healthcheck_port"`
+	ElectionPort           int           `yaml:"election_port"`
+	Protocol               string        `yaml:"protocol"`
+	PacketLimit            int           `yaml:"packet_limit"`
+	Message                string        `yaml:"healthcheck_message"`
+	ExpectedResponse       string        `yaml:"healthcheck_response"`
+	MaxRetries             int           `yaml:"max_retries"`
+	MaxConnectionRetries   int           `yaml:"max_connection_retries"`
+	RetryDelay             time.Duration `yaml:"retry_delay"`
+	ConnectionRetryDelay   time.Duration `yaml:"connection_retry_delay"`
+	Interval               time.Duration `yaml:"interval"`
+	Services               []string      `yaml:"services"`
+	TTL                    int           `yaml:"ttl"`
+	AmountOfHealthCheckers int           `yaml:"amount_of_health_checkers"`
 }
 
 func LoadConfig() (*HealthCheckerConfig, error) {

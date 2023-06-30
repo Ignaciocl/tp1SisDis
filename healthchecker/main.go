@@ -9,6 +9,7 @@ import (
 )
 
 const (
+	idEnvVar        = "ID"
 	logLevelEnv     = "LOG_LEVEL"
 	defaultLogLevel = "INFO"
 	service         = "health-checker"
@@ -33,6 +34,11 @@ func initLogger(logLevel string) error {
 }
 
 func main() {
+	healthCheckerID := os.Getenv(idEnvVar)
+	if healthCheckerID == "" {
+		panic("missing Health Checker ID")
+	}
+
 	logLevel := os.Getenv(logLevelEnv)
 	if logLevel == "" {
 		logLevel = defaultLogLevel
@@ -49,7 +55,7 @@ func main() {
 		return
 	}
 
-	healthChecker := entity.NewHealthChecker(healthCheckerConfig)
+	healthChecker := entity.NewHealthChecker(healthCheckerID, healthCheckerConfig)
 	log.Info(getLogMessage("Health checker initialized correctly, beginning to checking services...", nil))
 	err = healthChecker.Run()
 

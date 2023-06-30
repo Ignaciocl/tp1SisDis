@@ -1,4 +1,5 @@
 healthcheck_port: 6969
+election_port: 3000
 packet_limit: 8192 # 8 * 1024
 protocol: "tcp"
 healthcheck_message: 'te estas portando mal'
@@ -6,12 +7,17 @@ healthcheck_response: 'seras castigada'
 max_retries: 5
 retry_delay: 1s
 interval: 5s
-max_connection_retries: 15
+max_connection_retries: 10
 connection_retry_delay: 2s
 ttl: 5
 
+amount_of_health_checkers: 3
+
 services:
   - 'server'
+  - 'diosito1'
+  - 'diosito2'
+  - 'diosito3'
   - 'accumulator-main'
   - 'accumulator-montreal1'
   - 'accumulator-montreal2'
