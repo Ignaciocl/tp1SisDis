@@ -19,6 +19,7 @@ type JoinerDataStation struct {
 	DataTrip    *[]ReceivableDataTrip  `json:"tripData,omitempty"`
 	Name        string                 `json:"name"`
 	ClientID    string                 `json:"client_id"`
+	City        string                 `json:"city"`
 	common.EofData
 }
 

@@ -10,7 +10,7 @@ import (
 
 const (
 	logLevelEnv     = "LOG_LEVEL"
-	defaultLogLevel = "DEBUG"
+	defaultLogLevel = "INFO"
 	service         = "health-checker"
 )
 

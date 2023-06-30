@@ -3,7 +3,7 @@ module tp1SisDis/healthchecker
 go 1.20
 
 require (
-	github.com/Ignaciocl/tp1SisdisCommons v0.6.12
+	github.com/Ignaciocl/tp1SisdisCommons v0.7.0
 	github.com/docker/docker v24.0.2+incompatible
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.9.3

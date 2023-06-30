@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
 	"github.com/Ignaciocl/tp1SisdisCommons/fileManager"
 	commonHealthcheck "github.com/Ignaciocl/tp1SisdisCommons/healthcheck"
@@ -29,13 +30,17 @@ func (sd *weatherDuration) addW(w weatherDuration) {
 	sd.duration += w.duration
 }
 
-func processData(data JoinerDataStation, accumulator map[string]weatherDuration) { // Check for city
+func getKey(date, city string) string {
+	return fmt.Sprintf("%s-%s", date, city)
+}
+
+func processData(data JoinerDataStation, accumulator map[string]weatherDuration, city string) { // Check for city
 	if weather := data.DataWeather; weather != nil {
 		w := weatherDuration{
 			total:    0,
 			duration: 0,
 		}
-		accumulator[weather.Date] = w
+		accumulator[getKey(weather.Date, city)] = w
 	} else if trips := data.DataTrip; trips != nil {
 		for _, trip := range *trips {
 			if wd, ok := accumulator[trip.Date]; ok {
@@ -56,7 +61,7 @@ func getTripsToSend(data JoinerDataStation, accumulator map[string]weatherDurati
 		return toSend
 	}
 	for _, v := range *data.DataTrip {
-		if _, ok := accumulator[v.Date]; !ok {
+		if _, ok := accumulator[getKey(v.Date, data.City)]; !ok {
 			continue
 		}
 		toSend.Total += 1
@@ -77,11 +82,6 @@ type actionable struct {
 }
 
 func (a actionable) DoActionIfEOF() {
-	if a.m != nil {
-		for k := range a.m {
-			delete(a.m, k)
-		}
-	}
 	a.nc <- <-a.c // continue the loop
 	if a.cl != nil {
 		a.cl.Clear()
@@ -145,7 +145,7 @@ func main() {
 				utils.FailOnError(err, "Failed while receiving message")
 				continue
 			}
-			processData(data, acc)
+			processData(data, acc, data.City)
 			inputQueue.AckMessage(msgId)
 			weatherTurn <- s
 		}
@@ -164,7 +164,6 @@ func main() {
 					c:  tripTurn,
 					nc: weatherTurn,
 					m:  acc,
-					cl: csvReader,
 				})
 				inputTrips.AckMessage(msgId)
 				continue
@@ -212,7 +211,7 @@ func fillMapWithData(acc map[string]weatherDuration, manager fileManager.Manager
 			counter += 1
 			continue
 		}
-		processData(data, acc)
+		processData(data, acc, "")
 	}
 	if counter%maxAmountToContinue == 0 && counter > 0 {
 		a.DoActionIfEOF()

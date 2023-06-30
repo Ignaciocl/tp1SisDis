@@ -193,7 +193,6 @@ func main() {
 				tfe.AnswerEofOk(data.IdempotencyKey, actionable{
 					c:  tt,
 					nc: st,
-					cl: csvReader,
 				})
 				utils.LogError(inputQueueTrip.AckMessage(msgId), "failed while trying ack")
 				continue

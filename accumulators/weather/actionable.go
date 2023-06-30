@@ -36,6 +36,7 @@ func (a *actionable) DoActionIfEOF() {
 	utils.LogError(a.q.SendMessage(data, ""), fmt.Sprintf("could not send message to accumulator, message to be sent: %+v", data))
 	a.acc.Duration = 0
 	a.acc.Total = 0
+	a.acc.LastIdempotencyKey = ""
 	for _, c := range a.c {
 		c.Clear()
 	}
