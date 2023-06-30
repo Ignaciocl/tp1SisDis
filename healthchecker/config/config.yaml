@@ -7,7 +7,7 @@ healthcheck_response: 'seras castigada'
 max_retries: 5
 retry_delay: 1s
 interval: 5s
-max_connection_retries: 10
+max_connection_retries: 15
 connection_retry_delay: 2s
 ttl: 5
 

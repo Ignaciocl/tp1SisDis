@@ -858,7 +858,7 @@ services:
       - bikers
     environment:
       - ID=1
-      - LOG_LEVEL=DEBUG
+      - LOG_LEVEL=INFO
     volumes:
       - './healthchecker/main.go:/app/main.go'
       - '/var/run/docker.sock:/var/run/docker.sock'
@@ -873,7 +873,7 @@ services:
       - bikers
     environment:
       - ID=2
-      - LOG_LEVEL=DEBUG
+      - LOG_LEVEL=INFO
     volumes:
       - './healthchecker/main.go:/app/main.go'
       - '/var/run/docker.sock:/var/run/docker.sock'
@@ -882,6 +882,9 @@ services:
     build:
       context: ./healthchecker/
     container_name: diosito3
+    environment:
+      - ID=3
+      - LOG_LEVEL=INFO
     depends_on:
       - server
       - accumulator-main
@@ -942,9 +945,6 @@ services:
       - worker-weather5
     networks:
       - bikers
-    environment:
-      - ID=3
-      - LOG_LEVEL=DEBUG
     volumes:
       - './healthchecker/main.go:/app/main.go'
       - '/var/run/docker.sock:/var/run/docker.sock'

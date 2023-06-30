@@ -85,6 +85,7 @@ func (hc *HealthChecker) Run() error {
 		}(socket, errorChannel, serviceName, bully)
 	}
 
+	log.Infof("POR ALGUNA RAZON SALI DEL LOOP: %s", healthCheckerServiceName+hc.id)
 	err = <-errorChannel
 	close(errorChannel)
 
@@ -113,7 +114,7 @@ func (hc *HealthChecker) checkServiceStatus(socket common.Client, errorChannel c
 
 	for {
 		if !electionHandler.IsLeader() {
-			log.Debugf("YA NO SOY LIDER DIOSITO ID %s", hc.id)
+			log.Infof("YA NO SOY LIDER DIOSITO ID %s", hc.id)
 
 			// Stop tickers
 			retryTicker.Stop()
@@ -126,7 +127,7 @@ func (hc *HealthChecker) checkServiceStatus(socket common.Client, errorChannel c
 
 			// Wait till I'm the leader again
 			electionHandler.WakeMeUpWhenSeptemberEnds()
-			log.Debugf("VOLVI A SER LIDER DIOSITO ID %s", hc.id)
+			log.Infof("VOLVI A SER LIDER DIOSITO ID %s", hc.id)
 
 			// Start tickers and reset retriesCounter
 			retriesCounter = 0
@@ -216,6 +217,7 @@ func (hc *HealthChecker) checkServiceStatus(socket common.Client, errorChannel c
 				continue
 			}
 
+			log.Info("All goes well in retrying")
 			retriesCounter = 0
 			retryTicker.Stop()
 		}
@@ -234,7 +236,7 @@ func (hc *HealthChecker) hastaLaVistaBaby(containerName string) error {
 		return fmt.Errorf("%w: couldn't stop service '%s': %v", errKillingService, containerName, err)
 	}
 
-	log.Debugf("Container %s stopped successfully", containerName)
+	log.Infof("Container %s stopped successfully", containerName)
 	return nil
 }
 
@@ -251,7 +253,7 @@ func (hc *HealthChecker) bringMeToLife(containerName string) error {
 		return fmt.Errorf("%w: couldn't bring back to life service '%s': %v", errBringingBackToLifeService, containerName, err)
 	}
 
-	log.Debugf("Container %s bringed back to life succesffully!", containerName)
+	log.Infof("Container %s bringed back to life succesffully!", containerName)
 	return nil
 }
 
