@@ -1,7 +1,6 @@
 #!/bin/bash
 
-servicesToStop=( "worker-station2" "joiner-stations3" "server" "accumulator-stations2" )
-
+servicesToStop=( "accumulator-stations2" "accumulator-montreal3" "accumulator-weather3" "accumulator-montreal2" )
 
 while true; do
   for serviceName in "${servicesToStop[@]}"
