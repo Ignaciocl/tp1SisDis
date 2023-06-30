@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
 	"github.com/Ignaciocl/tp1SisdisCommons/fileManager"
@@ -88,6 +89,25 @@ func (a actionable) DoActionIfEOF() {
 	}
 }
 
+type t struct {
+}
+
+const Sep = "|pepe|"
+
+func (t t) ToWritable(data *JoinerDataStation) []byte {
+	returnable, _ := json.Marshal(data)
+	return returnable
+}
+
+func (t t) FromWritable(d []byte) *JoinerDataStation {
+	data := strings.Split(string(d), Sep)[0]
+	var r JoinerDataStation
+	if err := json.Unmarshal([]byte(data), &r); err != nil {
+		utils.LogError(err, "could not unmarshal from db")
+	}
+	return &r
+}
+
 func main() {
 	id := os.Getenv("id")
 	if id == "" {
@@ -116,6 +136,7 @@ func main() {
 	wqEOF, _ := common.CreateConsumerEOF(nil, "weatherQueue", inputQueue, workerWeather)
 	tqEOF, _ := common.CreateConsumerEOF([]common.NextToNotify{{"weatherAccumulator", aq}}, "weatherQueueTrip", inputTrips, workerTrips)
 	grace, _ := common.CreateGracefulManager("rabbit")
+	other, _ := fileManager.CreateDB[*JoinerDataStation](t{}, "pepe.csv", 3000, Sep)
 	defer grace.Close()
 	defer common.RecoverFromPanic(grace, "")
 	defer wqEOF.Close()
@@ -154,6 +175,7 @@ func main() {
 	go func() {
 		for {
 			data, msgId, err := inputTrips.ReceiveMessage()
+			utils.LogError(other.Write(&data), "could not write into db")
 			if data.EOF {
 				if !strings.HasSuffix(data.IdempotencyKey, id) {
 					log.Infof("eof received from another client: %s, not propagating", data.IdempotencyKey)
@@ -211,7 +233,7 @@ func fillMapWithData(acc map[string]weatherDuration, manager fileManager.Manager
 			counter += 1
 			continue
 		}
-		processData(data, acc, "")
+		processData(data, acc, data.City)
 	}
 	if counter%maxAmountToContinue == 0 && counter > 0 {
 		a.DoActionIfEOF()
