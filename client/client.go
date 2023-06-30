@@ -134,24 +134,22 @@ func (c *Client) Close() {
 // SendData sends the data of all the files from this client. The order is: weather, stations and trips
 func (c *Client) SendData() error {
 	log.Infof("Start sending data from client %s", c.ID)
-	for _, city := range cities {
-		err := c.sendStationsData(city)
-		if err != nil {
-			return err
-		}
-
-		err = c.sendWeatherData(city)
-		if err != nil {
-			return err
-		}
-
-		err = c.sendTripsData(city)
-		if err != nil {
-			return err
-		}
+	err := c.sendStationsData()
+	if err != nil {
+		return err
 	}
 
-	err := c.sendFinMessage(finishKey, wildcardCity) // We don't need the city, it's just a FIN connection message
+	err = c.sendWeatherData()
+	if err != nil {
+		return err
+	}
+
+	err = c.sendTripsData()
+	if err != nil {
+		return err
+	}
+
+	err = c.sendFinMessage(finishKey, wildcardCity) // We don't need the city, it's just a FIN connection message
 	if err != nil {
 		return err
 	}
@@ -161,18 +159,20 @@ func (c *Client) SendData() error {
 }
 
 // sendWeathersData sends all the data about weathers from this client
-func (c *Client) sendWeatherData(city string) error {
-	weatherFilepath := c.getFilePath(city, weatherFile)
-	err := c.sendDataFromFile(weatherFilepath, city, weatherFile)
-	if err != nil {
-		log.Error(fmt.Sprintf(errorMessage, weatherFile, city, err.Error()))
-		return err
-	}
+func (c *Client) sendWeatherData() error {
+	for _, city := range cities {
+		weatherFilepath := c.getFilePath(city, weatherFile)
+		err := c.sendDataFromFile(weatherFilepath, city, weatherFile)
+		if err != nil {
+			log.Error(fmt.Sprintf(errorMessage, weatherFile, city, err.Error()))
+			return err
+		}
 
-	err = c.sendFinMessage(weatherFile, city)
-	if err != nil {
-		log.Errorf("[method:SendWeatherData]error sending FIN message: %s", err.Error())
-		return err
+		err = c.sendFinMessage(weatherFile, city)
+		if err != nil {
+			log.Errorf("[method:SendWeatherData]error sending FIN message: %s", err.Error())
+			return err
+		}
 	}
 
 	log.Info("All Weather data was sent!")
@@ -180,18 +180,20 @@ func (c *Client) sendWeatherData(city string) error {
 }
 
 // sendStationsData sends all the data about stations from this client
-func (c *Client) sendStationsData(city string) error {
-	stationsFilepath := c.getFilePath(city, stationsFile)
-	err := c.sendDataFromFile(stationsFilepath, city, stationsFile)
-	if err != nil {
-		log.Error(fmt.Sprintf(errorMessage, stationsFile, city, err.Error()))
-		return err
-	}
+func (c *Client) sendStationsData() error {
+	for _, city := range cities {
+		stationsFilepath := c.getFilePath(city, stationsFile)
+		err := c.sendDataFromFile(stationsFilepath, city, stationsFile)
+		if err != nil {
+			log.Error(fmt.Sprintf(errorMessage, stationsFile, city, err.Error()))
+			return err
+		}
 
-	err = c.sendFinMessage(stationsFile, city)
-	if err != nil {
-		log.Errorf("[method:SendStationsData]error sending FIN message: %s", err.Error())
-		return err
+		err = c.sendFinMessage(stationsFile, city)
+		if err != nil {
+			log.Errorf("[method:SendStationsData]error sending FIN message: %s", err.Error())
+			return err
+		}
 	}
 
 	log.Info("All Stations data was sent!")
@@ -199,18 +201,20 @@ func (c *Client) sendStationsData(city string) error {
 }
 
 // sendTripsData sends all the data about trips from this client
-func (c *Client) sendTripsData(city string) error {
-	tripsFilepath := c.getFilePath(city, tripsFile)
-	err := c.sendDataFromFile(tripsFilepath, city, tripsFile)
-	if err != nil {
-		log.Error(fmt.Sprintf(errorMessage, tripsFile, city, err.Error()))
-		return err
-	}
+func (c *Client) sendTripsData() error {
+	for _, city := range cities {
+		tripsFilepath := c.getFilePath(city, tripsFile)
+		err := c.sendDataFromFile(tripsFilepath, city, tripsFile)
+		if err != nil {
+			log.Error(fmt.Sprintf(errorMessage, tripsFile, city, err.Error()))
+			return err
+		}
 
-	err = c.sendFinMessage(tripsFile, city)
-	if err != nil {
-		log.Errorf("[method:SendTripsData]error sending FIN message: %s", err.Error())
-		return err
+		err = c.sendFinMessage(tripsFile, city)
+		if err != nil {
+			log.Errorf("[method:SendTripsData]error sending FIN message: %s", err.Error())
+			return err
+		}
 	}
 
 	log.Info("All Trips data was sent!")
