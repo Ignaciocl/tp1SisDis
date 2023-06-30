@@ -81,7 +81,6 @@ func main() {
 			data, msgId, err := inputQueue.ReceiveMessage()
 			utils.LogError(other.Write(&data), "could not write")
 			// log.Infof("element received")
-			counter += 1
 			if err != nil {
 				utils.LogError(err, "error while reading message")
 				continue
@@ -99,8 +98,6 @@ func main() {
 				}), "couldn't write into eof db")
 				sfe.AnswerEofOk(id, &act)
 				utils.LogError(inputQueue.AckMessage(msgId), "error while acking msg")
-				log.Infof("%d is amount used", counter)
-				counter = 0
 				continue
 			}
 			if ik.IsKey(data.IdempotencyKey) {

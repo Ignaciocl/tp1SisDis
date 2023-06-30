@@ -4,8 +4,8 @@ github.com/Ignaciocl/tp1SisdisCommons v0.6.13 h1:HykP8yGIjA7ebqBdujj6WdNNwIK3e2W
 github.com/Ignaciocl/tp1SisdisCommons v0.6.13/go.mod h1:CXI2LfiMoCFYA8LgpX2rWEJx+7xY9bWyH2cXVLONplE=
 github.com/Ignaciocl/tp1SisdisCommons v0.7.0 h1:94JMsj7FSIPEt8rcSdMx0UBTMoDK5uB1DEv0OACmtuI=
 github.com/Ignaciocl/tp1SisdisCommons v0.7.0/go.mod h1:CXI2LfiMoCFYA8LgpX2rWEJx+7xY9bWyH2cXVLONplE=
-github.com/Ignaciocl/tp1SisdisCommons v0.8.0 h1:o4mM4NZVeTH7/ikRWeI0w3VH1FdA77ERpS8m5YBov5Y=
-github.com/Ignaciocl/tp1SisdisCommons v0.8.0/go.mod h1:CXI2LfiMoCFYA8LgpX2rWEJx+7xY9bWyH2cXVLONplE=
+github.com/Ignaciocl/tp1SisdisCommons v0.8.1 h1:8vVrotIHNhhwCW5Uas4fpV7aEV40ywoal2QXCIkycxc=
+github.com/Ignaciocl/tp1SisdisCommons v0.8.1/go.mod h1:CXI2LfiMoCFYA8LgpX2rWEJx+7xY9bWyH2cXVLONplE=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

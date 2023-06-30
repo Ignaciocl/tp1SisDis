@@ -3,7 +3,7 @@ module distributor
 go 1.20
 
 require (
-	github.com/Ignaciocl/tp1SisdisCommons v0.8.0
+	github.com/Ignaciocl/tp1SisdisCommons v0.8.1
 	gopkg.in/yaml.v3 v3.0.1
 )
 

@@ -23,6 +23,13 @@ type JoinerDataStation struct {
 	common.EofData
 }
 
+func (j JoinerDataStation) GetId() int64 {
+	return 0
+}
+
+func (j JoinerDataStation) SetId(id int64) {
+}
+
 type weatherDuration struct {
 	total    int
 	duration int
