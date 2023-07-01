@@ -1,9 +1,6 @@
 FROM golang
 WORKDIR /app
-COPY ./go.mod .
-COPY ./go.sum .
-RUN go get github.com/codegangsta/gin
-RUN go install github.com/codegangsta/gin
-RUN go mod download
 COPY . .
-ENTRYPOINT ["gin", "--immediate","run","/app/main.go"]
+RUN go mod download
+RUN CGO_ENABLED=0 GOOS=linux go build -o /program
+ENTRYPOINT ["/program"]
