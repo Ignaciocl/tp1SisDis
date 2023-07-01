@@ -44,6 +44,7 @@ func processData(data AccumulatorData, m map[string]dStation) dStation {
 		station = dStation{
 			Counter:         0,
 			DistanceCounted: 0,
+			Station:         data.EndingStation,
 		}
 	}
 	station.add(data.Distance)
