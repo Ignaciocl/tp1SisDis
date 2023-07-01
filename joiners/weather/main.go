@@ -76,16 +76,21 @@ type clearable interface {
 }
 
 type actionable struct {
-	c  chan struct{}
-	nc chan struct{}
-	m  map[string]weatherDuration
-	cl clearable
+	c       chan struct{}
+	nc      chan struct{}
+	m       map[string]weatherDuration
+	cl      clearable
+	counter *int
 }
 
 func (a actionable) DoActionIfEOF() {
-	a.nc <- <-a.c // continue the loop
-	if a.cl != nil {
-		a.cl.Clear()
+	*a.counter = *a.counter - 1
+	if *a.counter <= 0 {
+		a.nc <- <-a.c // continue the loop
+		*a.counter = 3
+		if a.cl != nil {
+			a.cl.Clear()
+		}
 	}
 }
 
@@ -124,10 +129,6 @@ func main() {
 	tripTurn := make(chan struct{}, 1)
 	weatherTurn := make(chan struct{}, 1)
 	weatherTurn <- struct{}{}
-	fillMapWithData(acc, csvReader, actionable{
-		c:  weatherTurn,
-		nc: tripTurn,
-	}, workerWeather)
 	log.Info("data filled with info previously set")
 	connection, _ := queue.InitializeConnectionRabbit(nil, "rabbit")
 	inputQueue, _ := queue.InitializeReceiver[JoinerDataStation]("weatherQueue", "", id, "", connection)
@@ -137,6 +138,14 @@ func main() {
 	tqEOF, _ := common.CreateConsumerEOF([]common.NextToNotify{{"weatherAccumulator", aq}}, "weatherQueueTrip", inputTrips, workerTrips)
 	grace, _ := common.CreateGracefulManager("rabbit")
 	other, _ := fileManager.CreateDB[*JoinerDataStation](t{}, "pepe.csv", 3000, Sep)
+	eofDb, err := fileManager.CreateDB[*eofData](t2{}, eofStorageFilename, 300, Sep)
+	utils.FailOnError(err, "could not create eof")
+	counter := 3
+	fillMapWithData(acc, csvReader, actionable{
+		c:       weatherTurn,
+		nc:      tripTurn,
+		counter: &counter,
+	}, wqEOF, eofDb, workerWeather, tqEOF)
 	defer grace.Close()
 	defer common.RecoverFromPanic(grace, "")
 	defer wqEOF.Close()
@@ -148,6 +157,7 @@ func main() {
 		for {
 			data, msgId, err := inputQueue.ReceiveMessage()
 			utils.LogError(csvReader.Write(data), "could not write info")
+			utils.LogError(other.Write(&data), "could not write into db")
 			if data.EOF {
 				if !strings.HasSuffix(data.IdempotencyKey, id) {
 					log.Infof("eof received from another client: %s, not propagating", data.IdempotencyKey)
@@ -155,20 +165,19 @@ func main() {
 					continue
 				}
 				wqEOF.AnswerEofOk(data.IdempotencyKey, actionable{
-					c:  weatherTurn,
-					nc: tripTurn,
+					c:       weatherTurn,
+					nc:      tripTurn,
+					counter: &counter,
 				})
 				inputQueue.AckMessage(msgId)
 				continue
 			}
-			s := <-weatherTurn
 			if err != nil {
 				utils.FailOnError(err, "Failed while receiving message")
 				continue
 			}
 			processData(data, acc, data.City)
 			inputQueue.AckMessage(msgId)
-			weatherTurn <- s
 		}
 	}() // For weather
 
@@ -183,11 +192,17 @@ func main() {
 					continue
 				}
 				tqEOF.AnswerEofOk(data.IdempotencyKey, actionable{
-					c:  tripTurn,
-					nc: weatherTurn,
-					m:  acc,
+					c:       tripTurn,
+					nc:      weatherTurn,
+					m:       acc,
+					counter: &counter,
+					//cl: csvReader,
 				})
 				inputTrips.AckMessage(msgId)
+				utils.LogError(eofDb.Write(&eofData{
+					IdempotencyKey: data.IdempotencyKey,
+					Id:             0,
+				}), "could not write eof")
 				continue
 			}
 			if err != nil {
@@ -195,6 +210,7 @@ func main() {
 				continue
 			}
 			s := <-tripTurn
+			log.Infof("acc is: %+v", acc)
 			t := getTripsToSend(data, acc)
 			if t.Total > 0 {
 				utils.LogError(aq.SendMessage(ToAccWeather{
@@ -221,8 +237,7 @@ func main() {
 	common.WaitForSigterm(grace)
 }
 
-func fillMapWithData(acc map[string]weatherDuration, manager fileManager.Manager[JoinerDataStation], a actionable, maxAmountToContinue int) {
-	counter := 0
+func fillMapWithData(acc map[string]weatherDuration, manager fileManager.Manager[JoinerDataStation], a actionable, db common.WaitForEof, eofDb fileManager.Manager[*eofData], maxAmountToContinue int, tfe common.WaitForEof) {
 	for {
 		data, err := manager.ReadLine()
 		if err != nil && errors.Is(err, io.EOF) {
@@ -230,12 +245,35 @@ func fillMapWithData(acc map[string]weatherDuration, manager fileManager.Manager
 		}
 		utils.FailOnError(err, "could not parse line from file")
 		if data.EOF {
-			counter += 1
+			db.AnswerEofOk(data.IdempotencyKey, a)
+			log.Infof("was eof")
 			continue
 		}
 		processData(data, acc, data.City)
+
 	}
-	if counter%maxAmountToContinue == 0 && counter > 0 {
-		a.DoActionIfEOF()
+	log.Infof("data revived is: %+v", acc)
+	d := make(map[string]int, 0)
+	for {
+		data, err := eofDb.ReadLine()
+		if err != nil && errors.Is(err, io.EOF) {
+			break
+		}
+		utils.FailOnError(err, "could not parse line from file")
+		i := d[data.IdempotencyKey]
+		d[data.IdempotencyKey] = i + 1
+	}
+	for k, v := range d {
+		if v == maxAmountToContinue {
+			*a.counter -= 1
+		} else {
+			for i := 0; i < v; i++ {
+				tfe.AnswerEofOk(k, a)
+			}
+		}
+	}
+	if *a.counter == 0 {
+		a.c <- <-a.nc
+		*a.counter = 3
 	}
 }

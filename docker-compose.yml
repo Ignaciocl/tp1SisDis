@@ -557,6 +557,9 @@ services:
       - amountWeatherWorkers=5
       - amountTripsWorkers=5
       - id=2
+    volumes:
+      - './joiners/weather/main.go:/app/main.go'
+      - './joiners/weather/dto.go:/app/dto.go'
     networks:
       - bikers
 

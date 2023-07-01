@@ -77,15 +77,20 @@ type clearable interface {
 }
 
 type actionable struct {
-	c  chan struct{}
-	nc chan struct{}
-	cl clearable
+	c       chan struct{}
+	nc      chan struct{}
+	cl      clearable
+	counter *int
 }
 
 func (a actionable) DoActionIfEOF() {
-	a.nc <- <-a.c // continue the loop
-	if a.cl != nil {
-		a.cl.Clear()
+	*a.counter = *a.counter - 1
+	if *a.counter <= 0 {
+		a.nc <- <-a.c // continue the loop
+		*a.counter = 3
+		if a.cl != nil {
+			a.cl.Clear()
+		}
 	}
 }
 
@@ -106,10 +111,6 @@ func main() {
 	tt := make(chan struct{}, 1)
 	st := make(chan struct{}, 1)
 	st <- struct{}{}
-	fillMapWithData(acc, csvReader, actionable{
-		c:  st,
-		nc: tt,
-	}, workerStation)
 	log.Info("data filled with info previously set")
 	inputQueue, _ := queue.InitializeReceiver[JoinerDataStation]("montrealQueue", "rabbit", id, "", nil)
 	inputQueueTrip, _ := queue.InitializeReceiver[JoinerDataStation]("montrealQueueTrip", "rabbit", id, "", nil)
@@ -117,6 +118,14 @@ func main() {
 	sfe, _ := common.CreateConsumerEOF(nil, "montrealQueue", inputQueue, workerStation)
 	tfe, _ := common.CreateConsumerEOF([]common.NextToNotify{{Name: "calculatorMontreal", Connection: aq}}, "montrealQueueTrip", inputQueueTrip, workerTrips)
 	grace, _ := common.CreateGracefulManager("rabbit")
+	eofDb, err := fileManager.CreateDB[*eofData](t2{}, eofStorageFilename, 300, Sep)
+	utils.FailOnError(err, "could not create eof")
+	counter := 3
+	fillMapWithData(acc, csvReader, actionable{
+		c:       st,
+		nc:      tt,
+		counter: &counter,
+	}, workerStation, sfe, eofDb, tfe)
 	defer grace.Close()
 	defer common.RecoverFromPanic(grace, "")
 	defer inputQueue.Close()
@@ -133,8 +142,9 @@ func main() {
 					continue
 				}
 				sfe.AnswerEofOk(data.IdempotencyKey, actionable{
-					c:  st,
-					nc: tt,
+					c:       st,
+					nc:      tt,
+					counter: &counter,
 				})
 				utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
 				continue
@@ -143,10 +153,8 @@ func main() {
 				utils.FailOnError(err, "Failed while receiving message")
 				continue
 			}
-			d := <-st
 			processData(data, acc)
 			utils.LogError(inputQueue.AckMessage(msgId), "failed while trying ack")
-			st <- d
 		}
 	}()
 	go func() {
@@ -159,9 +167,14 @@ func main() {
 					continue
 				}
 				tfe.AnswerEofOk(data.IdempotencyKey, actionable{
-					c:  tt,
-					nc: st,
+					c:       tt,
+					nc:      st,
+					counter: &counter,
 				})
+				utils.LogError(eofDb.Write(&eofData{
+					IdempotencyKey: data.IdempotencyKey,
+					Id:             0,
+				}), "could not write eof")
 				utils.LogError(inputQueueTrip.AckMessage(msgId), "failed while trying ack")
 				continue
 			}
@@ -186,8 +199,7 @@ func main() {
 	common.WaitForSigterm(grace)
 }
 
-func fillMapWithData(acc map[string]sData, manager fileManager.Manager[JoinerDataStation], a actionable, maxAmountToContinue int) {
-	counter := 0
+func fillMapWithData(acc map[string]sData, manager fileManager.Manager[JoinerDataStation], a actionable, maxAmountToContinue int, db common.WaitForEof, eofDb fileManager.Manager[*eofData], tfe common.WaitForEof) {
 	for {
 		data, err := manager.ReadLine()
 		if err != nil && errors.Is(err, io.EOF) {
@@ -195,12 +207,32 @@ func fillMapWithData(acc map[string]sData, manager fileManager.Manager[JoinerDat
 		}
 		utils.FailOnError(err, "could not parse line from file")
 		if data.EOF {
-			counter += 1
+			db.AnswerEofOk(data.IdempotencyKey, a)
 			continue
 		}
 		processData(data, acc)
 	}
-	if counter%maxAmountToContinue == 0 && counter > 0 {
-		a.DoActionIfEOF()
+	d := make(map[string]int, 0)
+	for {
+		data, err := eofDb.ReadLine()
+		if err != nil && errors.Is(err, io.EOF) {
+			break
+		}
+		utils.FailOnError(err, "could not parse line from file")
+		i := d[data.IdempotencyKey]
+		d[data.IdempotencyKey] = i + 1
+	}
+	for k, v := range d {
+		if v == maxAmountToContinue {
+			*a.counter -= 1
+		} else {
+			for i := 0; i < v; i++ {
+				tfe.AnswerEofOk(k, a)
+			}
+		}
+	}
+	if *a.counter == 0 {
+		a.c <- <-a.nc
+		*a.counter = 3
 	}
 }
