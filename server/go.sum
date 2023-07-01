@@ -58,6 +58,12 @@ github.com/Ignaciocl/tp1SisdisCommons v0.6.11 h1:eISdMb3rkYD9/1l/X3F46Ygm7Vf2GDN
 github.com/Ignaciocl/tp1SisdisCommons v0.6.11/go.mod h1:CXI2LfiMoCFYA8LgpX2rWEJx+7xY9bWyH2cXVLONplE=
 github.com/Ignaciocl/tp1SisdisCommons v0.6.12 h1:stcKt1phUFMLCUxJ1f/PBg6Z332+KClG4HCoCxuVNIc=
 github.com/Ignaciocl/tp1SisdisCommons v0.6.12/go.mod h1:CXI2LfiMoCFYA8LgpX2rWEJx+7xY9bWyH2cXVLONplE=
+github.com/Ignaciocl/tp1SisdisCommons v0.6.13 h1:HykP8yGIjA7ebqBdujj6WdNNwIK3e2WOqZctUD2EYCQ=
+github.com/Ignaciocl/tp1SisdisCommons v0.6.13/go.mod h1:CXI2LfiMoCFYA8LgpX2rWEJx+7xY9bWyH2cXVLONplE=
+github.com/Ignaciocl/tp1SisdisCommons v0.7.0 h1:94JMsj7FSIPEt8rcSdMx0UBTMoDK5uB1DEv0OACmtuI=
+github.com/Ignaciocl/tp1SisdisCommons v0.7.0/go.mod h1:CXI2LfiMoCFYA8LgpX2rWEJx+7xY9bWyH2cXVLONplE=
+github.com/Ignaciocl/tp1SisdisCommons v0.8.1 h1:8vVrotIHNhhwCW5Uas4fpV7aEV40ywoal2QXCIkycxc=
+github.com/Ignaciocl/tp1SisdisCommons v0.8.1/go.mod h1:CXI2LfiMoCFYA8LgpX2rWEJx+7xY9bWyH2cXVLONplE=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
 github.com/chzyer/logex v1.1.10/go.mod h1:+Ywpsq7O8HXn0nuIou7OrIPyXbp3wmkHB+jjWRnGsAI=
 github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e/go.mod h1:nSuG5e5PlCu98SY8svDHJxuZscDgtXS6KTTbou5AhLI=

@@ -21,7 +21,7 @@ keep_trying_message: '{"continue": true}'
 
 sender_config:
   consumer: 'distributor'
-  amount_of_distributors: 3
+  amount_of_distributors: 5
 
 receiver_config:
   queue_name: 'accConnection'

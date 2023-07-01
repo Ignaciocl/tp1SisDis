@@ -1,4 +1,5 @@
 healthcheck_port: 6969
+election_port: 3000
 packet_limit: 8192 # 8 * 1024
 protocol: "tcp"
 healthcheck_message: 'te estas portando mal'
@@ -10,28 +11,76 @@ max_connection_retries: 15
 connection_retry_delay: 2s
 ttl: 5
 
+amount_of_health_checkers: 3
+
 services:
   - 'server'
-#- 'accumulator-main'
-#- 'accumulator-montreal1'
-#- 'accumulator-stations1'
-#- 'accumulator-weather1'
-#- 'calculator1'
-#- 'calculator2'
-#- 'calculator3'
-#- 'distributor1'
-#- 'distributor2'
-#- 'distributor3'
-#- 'joiner-montreal1'
-#- 'joiner-stations1'
-#- 'joiner-stations2'
-#- 'joiner-weather1'
-#- 'worker-station1'
-#- 'worker-station2'
-#- 'worker-station3'
-#- 'worker-trip1'
-#- 'worker-trip2'
-#- 'worker-trip3'
-#- 'worker-weather1'
-#- 'worker-weather2'
-#- 'worker-weather3'
+  - 'diosito1'
+  - 'diosito2'
+  - 'diosito3'
+  - 'accumulator-main'
+  - 'accumulator-montreal1'
+  - 'accumulator-montreal2'
+  - 'accumulator-montreal3'
+  - 'accumulator-montreal4'
+  - 'accumulator-montreal5'
+
+  - 'accumulator-stations1'
+  - 'accumulator-stations2'
+  - 'accumulator-stations3'
+  - 'accumulator-stations4'
+  - 'accumulator-stations5'
+
+  - 'accumulator-weather1'
+  - 'accumulator-weather2'
+  - 'accumulator-weather3'
+  - 'accumulator-weather4'
+  - 'accumulator-weather5'
+
+  - 'calculator1'
+  - 'calculator2'
+  - 'calculator3'
+  - 'calculator4'
+  - 'calculator5'
+
+  - 'distributor1'
+  - 'distributor2'
+  - 'distributor3'
+  - 'distributor4'
+  - 'distributor5'
+
+  - 'joiner-montreal1'
+  - 'joiner-montreal2'
+  - 'joiner-montreal3'
+  - 'joiner-montreal4'
+  - 'joiner-montreal5'
+
+  - 'joiner-stations1'
+  - 'joiner-stations2'
+  - 'joiner-stations3'
+  - 'joiner-stations4'
+  - 'joiner-stations5'
+
+  - 'joiner-weather1'
+  - 'joiner-weather2'
+  - 'joiner-weather3'
+  - 'joiner-weather4'
+  - 'joiner-weather5'
+
+  - 'worker-station1'
+  - 'worker-station2'
+  - 'worker-station3'
+  - 'worker-station4'
+  - 'worker-station5'
+
+  - 'worker-trip1'
+  - 'worker-trip2'
+  - 'worker-trip3'
+  - 'worker-trip4'
+  - 'worker-trip5'
+
+  - 'worker-weather1'
+  - 'worker-weather2'
+  - 'worker-weather3'
+  - 'worker-weather4'
+  - 'worker-weather5'

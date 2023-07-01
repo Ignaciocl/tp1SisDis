@@ -1,8 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
-	"strconv"
+	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 )
 
 type ReceivableDataWeather struct {
@@ -19,7 +20,15 @@ type JoinerDataStation struct {
 	DataTrip    *[]ReceivableDataTrip  `json:"tripData,omitempty"`
 	Name        string                 `json:"name"`
 	ClientID    string                 `json:"client_id"`
+	City        string                 `json:"city"`
 	common.EofData
+}
+
+func (j JoinerDataStation) GetId() int64 {
+	return 0
+}
+
+func (j JoinerDataStation) SetId(id int64) {
 }
 
 type weatherDuration struct {
@@ -42,25 +51,12 @@ type transformer struct {
 }
 
 func (t transformer) ToWritable(data JoinerDataStation) []string {
-	if !data.EOF {
-		s := data.DataWeather
-		return []string{data.ClientID, data.IdempotencyKey, strconv.FormatBool(data.EOF), s.Date}
-	}
-	return []string{data.ClientID, data.IdempotencyKey, strconv.FormatBool(data.EOF), ""}
+	a, _ := json.Marshal(data)
+	return []string{string(a)}
 }
 
 func (t transformer) FromWritable(d []string) JoinerDataStation {
-	eof, _ := strconv.ParseBool(d[2])
-	r := JoinerDataStation{
-		ClientID: d[0],
-	}
-	r.EOF = eof
-	r.IdempotencyKey = d[1]
-	if !eof {
-		s := d[3]
-		r.DataWeather = &ReceivableDataWeather{
-			Date: s,
-		}
-	}
+	var r JoinerDataStation
+	utils.LogError(json.Unmarshal([]byte(d[0]), &r), "failed to unmarshall while reading")
 	return r
 }

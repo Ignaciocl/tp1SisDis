@@ -44,6 +44,7 @@ func processData(data AccumulatorData, m map[string]dStation) dStation {
 		station = dStation{
 			Counter:         0,
 			DistanceCounted: 0,
+			Station:         data.EndingStation,
 		}
 	}
 	station.add(data.Distance)
@@ -56,7 +57,7 @@ func main() {
 	if id == "" {
 		panic("missing montreal accumulator id")
 	}
-	amountCalc, err := strconv.Atoi(os.Getenv("calculators"))
+	_, err := strconv.Atoi(os.Getenv("calculators"))
 	utils.FailOnError(err, "missing env value of calculator")
 	db, err := fileManager.CreateDB[*dStation](t{}, storageFilename, 300, Sep)
 	utils.FailOnError(err, "could not create db")
@@ -66,7 +67,7 @@ func main() {
 	utils.FailOnError(err, "could not create db")
 	inputQueue, _ := queue.InitializeReceiver[AccumulatorInfo]("preAccumulatorMontreal", "rabbit", id, "", nil)
 	outputQueue, _ := queue.InitializeSender[Accumulator]("accumulator", 0, nil, "rabbit")
-	me, _ := common.CreateConsumerEOF([]common.NextToNotify{{"accumulator", outputQueue}}, "preAccumulatorSt", inputQueue, amountCalc)
+	me, _ := common.CreateConsumerEOF([]common.NextToNotify{{"accumulator", outputQueue}}, "preAccumulatorSt", inputQueue, 3)
 	grace, _ := common.CreateGracefulManager("rabbit")
 	defer grace.Close()
 	defer common.RecoverFromPanic(grace, "")

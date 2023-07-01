@@ -1,9 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	common "github.com/Ignaciocl/tp1SisdisCommons"
-	"strconv"
-	"strings"
+	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 )
 
 const Sep = "|PONG|"
@@ -52,29 +52,12 @@ type transformer struct {
 }
 
 func (t transformer) ToWritable(data JoinerDataStation) []string {
-	if !data.EOF {
-		s := data.DataStation
-		sData := []string{s.Name, s.Code, s.Name, strconv.Itoa(s.Year)}
-		return []string{data.ClientID, data.IdempotencyKey, strconv.FormatBool(data.EOF), strings.Join(sData, Sep)}
-	}
-	return []string{data.ClientID, data.IdempotencyKey, strconv.FormatBool(data.EOF), ""}
+	a, _ := json.Marshal(data)
+	return []string{string(a)}
 }
 
 func (t transformer) FromWritable(d []string) JoinerDataStation {
-	eof, _ := strconv.ParseBool(d[2])
-	r := JoinerDataStation{
-		ClientID: d[0],
-	}
-	r.EOF = eof
-	r.IdempotencyKey = d[1]
-	if !eof {
-		s := strings.Split(d[3], Sep)
-		year, _ := strconv.Atoi(s[3])
-		r.DataStation = &ReceivableDataStation{
-			Code: s[1],
-			Name: s[0],
-			Year: year,
-		}
-	}
+	var r JoinerDataStation
+	utils.LogError(json.Unmarshal([]byte(d[0]), &r), "failed to unmarshall while reading")
 	return r
 }

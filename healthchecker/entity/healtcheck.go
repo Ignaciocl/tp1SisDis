@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	common "github.com/Ignaciocl/tp1SisdisCommons/client"
+	commonHealthcheck "github.com/Ignaciocl/tp1SisdisCommons/healthcheck"
+	"github.com/Ignaciocl/tp1SisdisCommons/leader"
+	"github.com/Ignaciocl/tp1SisdisCommons/utils"
 	"github.com/docker/docker/api/types/container"
 	dockerClient "github.com/docker/docker/client"
 	log "github.com/sirupsen/logrus"
@@ -12,12 +15,16 @@ import (
 	"tp1SisDis/healthchecker/config"
 )
 
+const healthCheckerServiceName = "diosito"
+
 type HealthChecker struct {
+	id     string
 	config *config.HealthCheckerConfig
 }
 
-func NewHealthChecker(cfg *config.HealthCheckerConfig) *HealthChecker {
+func NewHealthChecker(id string, cfg *config.HealthCheckerConfig) *HealthChecker {
 	return &HealthChecker{
+		id:     id,
 		config: cfg,
 	}
 }
@@ -25,28 +32,61 @@ func NewHealthChecker(cfg *config.HealthCheckerConfig) *HealthChecker {
 func (hc *HealthChecker) Run() error {
 	errorChannel := make(chan error)
 	var waitGroup sync.WaitGroup
+
+	log.Debugf("Iniciando health checker: %s", healthCheckerServiceName+hc.id)
+	healthCheckerReplier := commonHealthcheck.InitHealthCheckerReplier(healthCheckerServiceName + hc.id)
+
+	go func() {
+		err := healthCheckerReplier.Run()
+		utils.FailOnError(err, "health checker replier error")
+	}()
+
+	ring := make(map[string]string, hc.config.AmountOfHealthCheckers)
+	for healthCheckerID := 1; healthCheckerID <= hc.config.AmountOfHealthCheckers; healthCheckerID++ {
+		ring[fmt.Sprintf("%v", healthCheckerID)] = fmt.Sprintf("%s%v:%v", healthCheckerServiceName, healthCheckerID, hc.config.ElectionPort)
+	}
+
+	// Create Bully Election Handler
+	bully, err := leader.NewBully(
+		hc.id,
+		fmt.Sprintf("%s%s:%v", healthCheckerServiceName, hc.id, hc.config.ElectionPort),
+		hc.config.Protocol,
+		ring,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	defer bully.Close()
+
+	go func() {
+		bully.Run()
+	}()
+
+	bully.WakeMeUpWhenSeptemberEnds()
 	for _, serviceName := range hc.config.Services {
+		if serviceName == healthCheckerServiceName+hc.id {
+			continue
+		}
+
 		socket := common.NewSocket(common.NewSocketConfig(
 			hc.config.Protocol,
 			fmt.Sprintf("%s:%v", serviceName, hc.config.Port),
 			hc.config.PacketLimit,
 		))
 
-		err := setConnection(socket, hc.config.MaxConnectionRetries, hc.config.ConnectionRetryDelay)
-		if err != nil {
-			return fmt.Errorf("%w: could not establish connection with %s", err, serviceName)
-		}
-
 		waitGroup.Add(1)
-		go func(socket common.Client, channel chan error, service string) {
+		go func(socket common.Client, channel chan error, service string, electionHandler leader.Leader) {
 			defer waitGroup.Done()
-			hc.checkServiceStatus(socket, errorChannel, service)
+			defer log.Infof("VA A MORIR EL THREAD")
+			hc.checkServiceStatus(socket, errorChannel, service, electionHandler)
 
-		}(socket, errorChannel, serviceName)
-
+		}(socket, errorChannel, serviceName, bully)
 	}
 
-	err := <-errorChannel
+	log.Infof("POR ALGUNA RAZON SALI DEL LOOP: %s", healthCheckerServiceName+hc.id)
+	err = <-errorChannel
 	close(errorChannel)
 
 	waitGroup.Wait()
@@ -55,7 +95,7 @@ func (hc *HealthChecker) Run() error {
 
 // checkServiceStatus sends a heartbeat to a given service. Each heartbeat is sent with a fixed frequency.
 // In case of errors, it retries some fixed amount of times, once this threshold is passed, an error is returned.
-func (hc *HealthChecker) checkServiceStatus(socket common.Client, errorChannel chan error, serviceName string) {
+func (hc *HealthChecker) checkServiceStatus(socket common.Client, errorChannel chan error, serviceName string, electionHandler leader.Leader) {
 	intervalTicker := time.NewTicker(hc.config.Interval)
 	retryTicker := time.NewTicker(hc.config.Interval)
 	retryTicker.Stop()
@@ -68,9 +108,32 @@ func (hc *HealthChecker) checkServiceStatus(socket common.Client, errorChannel c
 		}
 	}()
 
+	//_ = setConnection(socket, hc.config.MaxConnectionRetries, hc.config.ConnectionRetryDelay) // we don't need to handle the error, if it can't connect it means it's death
+
 	heartbeatBytes := []byte(hc.config.Message)
 
 	for {
+		if !electionHandler.IsLeader() {
+			log.Infof("YA NO SOY LIDER DIOSITO ID %s", hc.id)
+
+			// Stop tickers
+			retryTicker.Stop()
+			intervalTicker.Stop()
+
+			// Close connections
+			if socket.IsConnectionOpen() {
+				_ = socket.Close()
+			}
+
+			// Wait till I'm the leader again
+			electionHandler.WakeMeUpWhenSeptemberEnds()
+			log.Infof("VOLVI A SER LIDER DIOSITO ID %s", hc.id)
+
+			// Start tickers and reset retriesCounter
+			retriesCounter = 0
+			intervalTicker.Reset(hc.config.Interval)
+		}
+
 		if retriesCounter >= hc.config.MaxRetries {
 			retryTicker.Stop()
 			_ = socket.Close()
@@ -100,6 +163,15 @@ func (hc *HealthChecker) checkServiceStatus(socket common.Client, errorChannel c
 
 		select {
 		case <-intervalTicker.C:
+			// Try to connect
+			if !socket.IsConnectionOpen() {
+				err := socket.OpenConnection()
+				if err != nil {
+					retryTicker = time.NewTicker(hc.config.RetryDelay)
+					continue
+				}
+			}
+
 			// Send a new heartbeat
 			err := socket.Send(heartbeatBytes)
 			if err != nil {
@@ -117,12 +189,20 @@ func (hc *HealthChecker) checkServiceStatus(socket common.Client, errorChannel c
 				retryTicker = time.NewTicker(hc.config.RetryDelay)
 				continue
 			}
-			log.Debugf("[service: %s] got heartbeat response '%s'", serviceName, string(response))
+			log.Debugf("[health checker: %s][service: %s] got heartbeat response '%s'", healthCheckerServiceName+hc.id, serviceName, string(response))
 			retriesCounter = 0
 
 		case <-retryTicker.C:
-			log.Debugf("[service: %s] Some error occurs, trying again...", serviceName)
+			log.Debugf("[health checker: %s][service: %s] Some error occurs, trying again...", healthCheckerServiceName+hc.id, serviceName)
 			retriesCounter += 1
+
+			if !socket.IsConnectionOpen() {
+				err := socket.OpenConnection()
+				if err != nil {
+					continue
+				}
+			}
+
 			err := socket.Send(heartbeatBytes)
 			if err != nil {
 				continue
@@ -137,6 +217,7 @@ func (hc *HealthChecker) checkServiceStatus(socket common.Client, errorChannel c
 				continue
 			}
 
+			log.Info("All goes well in retrying")
 			retriesCounter = 0
 			retryTicker.Stop()
 		}
@@ -155,7 +236,7 @@ func (hc *HealthChecker) hastaLaVistaBaby(containerName string) error {
 		return fmt.Errorf("%w: couldn't stop service '%s': %v", errKillingService, containerName, err)
 	}
 
-	log.Debugf("Container %s stopped successfully", containerName)
+	log.Infof("Container %s stopped successfully", containerName)
 	return nil
 }
 
@@ -172,7 +253,7 @@ func (hc *HealthChecker) bringMeToLife(containerName string) error {
 		return fmt.Errorf("%w: couldn't bring back to life service '%s': %v", errBringingBackToLifeService, containerName, err)
 	}
 
-	log.Debugf("Container %s bringed back to life succesffully!", containerName)
+	log.Infof("Container %s bringed back to life succesffully!", containerName)
 	return nil
 }
 
