@@ -210,7 +210,6 @@ func main() {
 				continue
 			}
 			s := <-tripTurn
-			log.Infof("acc is: %+v", acc)
 			t := getTripsToSend(data, acc)
 			if t.Total > 0 {
 				utils.LogError(aq.SendMessage(ToAccWeather{

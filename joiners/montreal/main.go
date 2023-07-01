@@ -41,6 +41,9 @@ func processTripData(trip *[]SendableDataTrip, accumulator map[string]sData, aq 
 	for _, v := range *trip {
 		if d, ok := obtainInfoToSend(accumulator, v); ok {
 			vToSend = append(vToSend, d)
+			if d.Name == "" {
+				log.Infof("something weird happened, check here,:%+v is map, %+v is trip", accumulator, v)
+			}
 		}
 	}
 	aq.SendMessage(AccumulatorInfo{
@@ -212,6 +215,7 @@ func fillMapWithData(acc map[string]sData, manager fileManager.Manager[JoinerDat
 		}
 		processData(data, acc)
 	}
+	log.Infof("data is: %+v", acc)
 	d := make(map[string]int, 0)
 	for {
 		data, err := eofDb.ReadLine()
